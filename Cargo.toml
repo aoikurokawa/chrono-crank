@@ -1,0 +1,19 @@
+[package]
+name = "keygen"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+bs58 = "0.5.0"
+clap = "2.33.0"
+dirs-next = "2.0.0"
+num_cpus = "1.16.0"
+solana-clap-utils = "1.17.4"
+solana-cli-config = "1.17.4"
+solana-remote-wallet = "1.17.4"
+solana-sdk = "1.17.4"
+solana-version = "1.17.4"
+tiny-bip39 = "0.8.2"
+
