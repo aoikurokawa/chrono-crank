@@ -4,6 +4,7 @@ use std::{
     rc::Rc,
     sync::atomic::{AtomicBool, AtomicU64},
     sync::{atomic::Ordering, Arc},
+    thread,
     time::Instant,
 };
 
@@ -231,6 +232,102 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
             let found = Arc::new(AtomicU64::new(0));
             let start = Instant::now();
             let done = Arc::new(AtomicBool::new(false));
+
+            let thread_handles: Vec<_> = (0..num_threads).map(|_| {
+                let done = done.clone();
+                let attempts = attempts.clone();
+                let found = found.clone();
+                let grind_matches_thread_safe = grind_matches_thread_safe.clone();
+                let passphrase = passphrase.clone();
+                let passphrase_message = passphrase_message.clone();
+                let derivation_path = derivation_path.clone();
+
+                thread::spawn(move || loop {
+                    if done.load(Ordering::Relaxed) {
+                        break;
+                    }
+
+                    let attempts = attempts.fetch_add(1, Ordering::Relaxed);
+                    if attempts % 1_000_000 == 0 {
+                        println!(
+                            "Searched {} keypairs in {}s. {} matches found.",
+                            attempts,
+                            start.elapsed().as_secs(),
+                            found.load(Ordering::Relaxed)
+                        );
+                    }
+                    let (keypair, phrase) = if use_mnemonic {
+                        let mnemonic = Mnemonic::new(mnemonic_type, language);
+                        let seed = Seed::new(&mnemonic, &passphrase);
+                        let keypair = match derivation_path {
+                            Some(_) => keypair_from_seed_and_derivation_path(
+                                seed.as_bytes(),
+                                derivation_path.clone(),
+                            ),
+                            None => keypair_from_seed(seed.as_bytes()),
+                        }.unwrap();
+                        (keypair, mnemonic.phrase().to_string())
+                    } else {
+                        (Keypair::new(), "".to_string())
+                    };
+
+                    if skip_len_44_pubkeys
+                        && keypair.pubkey() >= smallest_length_44_public_key::PUBKEY
+                    {
+                        continue;
+                    }
+                    let mut pubkey = bs58::encode(keypair.pubkey()).into_string();
+                    if ignore_case {
+                        pubkey = pubkey.to_lowercase();
+                    }
+                    let mut total_matches_found = 0;
+                    for i in 0..grind_matches_thread_safe.len() {
+                        if grind_matches_thread_safe[i].count.load(Ordering::Relaxed) == 0 {
+                            total_matches_found += 1;
+                            continue;
+                        }
+                        if (!grind_matches_thread_safe[i].starts.is_empty()
+                            && grind_matches_thread_safe[i].ends.is_empty()
+                            && pubkey.starts_with(&grind_matches_thread_safe[i].starts))
+                            || (grind_matches_thread_safe[i].starts.is_empty()
+                                && !grind_matches_thread_safe[i].ends.is_empty()
+                                && pubkey.ends_with(&grind_matches_thread_safe[i].ends))
+                            || (grind_matches_thread_safe[i].starts.is_empty()
+                                && !grind_matches_thread_safe[i].ends.is_empty()
+                                && pubkey.starts_with(&grind_matches_thread_safe[i].starts)
+                                && pubkey.ends_with(&grind_matches_thread_safe[i].ends))
+                        {
+                            let _found = found.fetch_add(1, Ordering::Relaxed);
+                            grind_matches_thread_safe[i]
+                                .count
+                                .fetch_sub(1, Ordering::Relaxed);
+                            if !no_outfile {
+                                write_keypair_file(
+                                    &keypair,
+                                    &format!("{}.json", keypair.pubkey()),
+                                ).unwrap();
+                                println!(
+                                    "Wrote keypair to {}",
+                                    &format!("{}.json", keypair.pubkey())
+                                );
+                            }
+                            if use_mnemonic {
+                                let divider = String::from_utf8(vec![b'='; phrase.len()]).unwrap();
+                                println!("{}\nFound matching key {}", &divider, keypair.pubkey());
+                                println!("\nSave this seed phrase{} to recover your new keypair:\n{}\n{}", passphrase_message, phrase, &divider);
+                            }
+                        }
+                    }
+                    if total_matches_found == grind_matches_thread_safe.len() {
+                        done.store(true, Ordering::Relaxed);
+                    }
+                })
+            })
+            .collect();
+
+            for thread_handles in thread_handles {
+                thread_handles.join().unwrap();
+            }
         }
         _ => unreachable!(),
     }
