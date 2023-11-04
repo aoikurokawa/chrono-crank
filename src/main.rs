@@ -1,17 +1,40 @@
-use std::{collections::HashSet, error, rc::Rc, sync::atomic::AtomicU64, sync::atomic::Ordering};
+use std::{
+    collections::HashSet,
+    error,
+    rc::Rc,
+    sync::atomic::{AtomicBool, AtomicU64},
+    sync::{atomic::Ordering, Arc},
+    time::Instant,
+};
 
+use bip39::{Mnemonic, MnemonicType, Seed};
 use clap::{crate_description, crate_name, value_parser, Arg, ArgMatches, Command};
 use solana_clap_v3_utils::{
     input_parsers::STDOUT_OUTFILE_TOKEN,
     input_validators::is_prompt_signer_source,
-    keygen::{derivation_path::derivation_path_arg, no_outfile_arg, KeyGenerationCommonArgs},
-    keypair::{signer_from_path, SKIP_SEED_PHRASE_VALIDATION_ARG},
+    keygen::{
+        check_for_overwrite,
+        derivation_path::{acquire_derivation_path, derivation_path_arg},
+        mnemonic::{
+            acquire_language, acquire_passphrase_and_message, no_passphrase_and_message,
+            WORD_COUNT_ARG,
+        },
+        no_outfile_arg, KeyGenerationCommonArgs, NO_OUTFILE_ARG,
+    },
+    keypair::{
+        keypair_from_path, keypair_from_seed_phrase, signer_from_path,
+        SKIP_SEED_PHRASE_VALIDATION_ARG,
+    },
     DisplayError,
 };
 use solana_cli_config::Config;
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use solana_sdk::{
-    signature::{write_keypair, write_keypair_file, Keypair},
+    pubkey::write_pubkey_file,
+    signature::{
+        keypair_from_seed, keypair_from_seed_and_derivation_path, write_keypair,
+        write_keypair_file, Keypair,
+    },
     signer::Signer,
 };
 
@@ -24,6 +47,194 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 }
 
 fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
+    let config = if let Some(config_file) = matches.value_of("config_file") {
+        Config::load(config_file).unwrap_or_default()
+    } else {
+        Config::default()
+    };
+
+    let mut wallet_manager = None;
+
+    let subcommand = matches.subcommand().unwrap();
+
+    match subcommand {
+        ("pubkey", matches) => {
+            let pubkey =
+                get_keypair_from_matches(matches, config, &mut wallet_manager)?.try_pubkey()?;
+
+            if matches.is_present("outfile") {
+                let outfile = matches.value_of("outfile").unwrap();
+                check_for_overwrite(outfile, matches)?;
+                write_pubkey_file(outfile, pubkey)?;
+            } else {
+                println!("{pubkey}");
+            }
+        }
+        ("new", matches) => {
+            let mut path = dirs_next::home_dir().expect("home directory");
+            let outfile = if matches.is_present("outfile") {
+                matches.value_of("outfile")
+            } else if matches.is_present(NO_OUTFILE_ARG.name) {
+                None
+            } else {
+                path.extend([".config", "solana", "id.json"]);
+                Some(path.to_str().unwrap())
+            };
+
+            match outfile {
+                Some(STDOUT_OUTFILE_TOKEN) => (),
+                Some(outfile) => check_for_overwrite(outfile, matches)?,
+                None => (),
+            }
+
+            let word_count = matches.value_of_t(WORD_COUNT_ARG.name).unwrap();
+            let mnemonic_type = MnemonicType::for_word_count(word_count)?;
+            let language = acquire_language(matches);
+
+            let silent = matches.is_present("silent");
+            if !silent {
+                println!("Generating a new keypair");
+            }
+
+            let derivation_path = acquire_derivation_path(matches)?;
+
+            let mnemonic = Mnemonic::new(mnemonic_type, language);
+            let (passphrase, passphrase_message) = acquire_passphrase_and_message(matches)?;
+
+            let seed = Seed::new(&mnemonic, &passphrase);
+            let keypair = match derivation_path {
+                Some(_) => keypair_from_seed_and_derivation_path(seed.as_bytes(), derivation_path)?,
+                None => keypair_from_seed(seed.as_bytes())?,
+            };
+
+            if let Some(outfile) = outfile {
+                output_keypair(&keypair, outfile, "new")
+                    .map_err(|err| format!("Unable to write {outfile}: {err}"))?;
+            }
+
+            if !silent {
+                let phrase = mnemonic.phrase();
+                let divider = String::from_utf8(vec![b'='; phrase.len()]).unwrap();
+                println!("{}\npubkey: {}\n{}\nSave this seed phrase{} to recover your new keypair:\n{}\n{}",
+                    &divider,
+                    keypair.pubkey(),
+                    &divider,
+                    passphrase_message,
+                    phrase,
+                    &divider
+                );
+            }
+        }
+        ("recover", matches) => {
+            let mut path = dirs_next::home_dir().expect("home directory");
+            let outfile = if matches.is_present("outfile") {
+                matches.value_of("outfile").unwrap()
+            } else {
+                path.extend([".config", "solana", "id.json"]);
+                path.to_str().unwrap()
+            };
+
+            if outfile != STDOUT_OUTFILE_TOKEN {
+                check_for_overwrite(outfile, matches)?;
+            }
+
+            let keypair_name = "recover";
+            let keypair = if let Some(path) = matches.value_of("prompt_signer") {
+                keypair_from_path(matches, path, keypair_name, true)?
+            } else {
+                let skip_validation = matches.is_present(SKIP_SEED_PHRASE_VALIDATION_ARG.name);
+                keypair_from_seed_phrase(keypair_name, skip_validation, true, None, true)?
+            };
+            output_keypair(&keypair, outfile, "recovered")?
+        }
+        ("grind", matches) => {
+            let ignore_case = matches.is_present("ignore_case");
+
+            let starts_with_args = if matches.is_present("starts_with") {
+                matches
+                    .values_of_t_or_exit::<String>("starts_with")
+                    .into_iter()
+                    .map(|s| if ignore_case { s.to_lowercase() } else { s })
+                    .collect()
+            } else {
+                HashSet::new()
+            };
+            let ends_with_args: HashSet<String> = if matches.is_present("ends_with") {
+                matches
+                    .values_of_t_or_exit::<String>("ends_with")
+                    .into_iter()
+                    .map(|s| if ignore_case { s.to_lowercase() } else { s })
+                    .collect()
+            } else {
+                HashSet::new()
+            };
+            let starts_and_ends_with_args: HashSet<String> =
+                if matches.is_present("starts_and_ends_with") {
+                    matches
+                        .values_of_t_or_exit::<String>("starts_and_ends_with")
+                        .into_iter()
+                        .map(|s| if ignore_case { s.to_lowercase() } else { s })
+                        .collect()
+                } else {
+                    HashSet::new()
+                };
+
+            if starts_with_args.is_empty()
+                && ends_with_args.is_empty()
+                && starts_with_args.is_empty()
+            {
+                return Err("Error: No keypair search criteria provided (--starts-with or --end-with or --starts-and-ends-with)".into());
+            }
+
+            let num_threads = *matches.get_one("num_threads").unwrap();
+
+            let grind_matches = grind_parse_args(
+                ignore_case,
+                starts_with_args,
+                ends_with_args,
+                starts_and_ends_with_args,
+                num_threads,
+            );
+
+            let use_mnemonic = matches.is_present("use_mnemonic");
+
+            let derivation_path = acquire_derivation_path(matches)?;
+
+            let word_count: usize = matches.value_of_t(WORD_COUNT_ARG.name)?;
+            let mnemonic_type = MnemonicType::for_word_count(word_count)?;
+            let language = acquire_language(matches);
+
+            let (passphrase, passphrase_message) = if use_mnemonic {
+                acquire_passphrase_and_message(matches)?
+            } else {
+                no_passphrase_and_message()
+            };
+            let no_outfile = matches.is_present(NO_OUTFILE_ARG.name);
+
+            let skip_len_44_pubkeys = grind_matches
+                .iter()
+                .map(|g| {
+                    let target_key = if ignore_case {
+                        g.starts.to_ascii_uppercase()
+                    } else {
+                        g.starts.clone()
+                    };
+                    let target_key =
+                        target_key + &(0..44 - g.starts.len()).map(|_| "1").collect::<String>();
+                    bs58::decode(target_key).into_vec()
+                })
+                .filter_map(|s| s.ok())
+                .all(|s| s.len() > 32);
+
+            let grind_matches_thread_safe = Arc::new(grind_matches);
+            let attempts = Arc::new(AtomicU64::new(1));
+            let found = Arc::new(AtomicU64::new(0));
+            let start = Instant::now();
+            let done = Arc::new(AtomicBool::new(false));
+        }
+        _ => unreachable!(),
+    }
+
     Ok(())
 }
 
