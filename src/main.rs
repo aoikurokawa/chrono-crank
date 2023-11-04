@@ -31,7 +31,9 @@ use solana_clap_v3_utils::{
 use solana_cli_config::Config;
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use solana_sdk::{
-    pubkey::write_pubkey_file,
+    instruction::{AccountMeta, Instruction},
+    message::Message,
+    pubkey::{write_pubkey_file, Pubkey},
     signature::{
         keypair_from_seed, keypair_from_seed_and_derivation_path, write_keypair,
         write_keypair_file, Keypair,
@@ -327,6 +329,27 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
 
             for thread_handles in thread_handles {
                 thread_handles.join().unwrap();
+            }
+        }
+        ("verify", matches) => {
+            let keypair = get_keypair_from_matches(matches, config, &mut wallet_manager)?;
+            let simple_message = Message::new(
+                &[Instruction::new_with_bincode(
+                    Pubkey::default(),
+                    &0,
+                    vec![AccountMeta::new(keypair.pubkey(), true)],
+                )],
+                Some(&keypair.pubkey()),
+            )
+            .serialize();
+            let signature = keypair.try_sign_message(&simple_message)?;
+            let pubkey_bs58 = matches.value_of("pubkey").unwrap();
+            let pubkey = bs58::decode(pubkey_bs58).into_vec().unwrap();
+            if signature.verify(&pubkey, &simple_message) {
+                println!("Verification for public key: {pubkey_bs58}: Success");
+            } else {
+                let err_msg = format!("Verification for public key: {pubkey_bs58}: Failed");
+                return Err(err_msg.into());
             }
         }
         _ => unreachable!(),
