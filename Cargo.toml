@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 bs58 = "0.5.0"
-clap = "2.33.0"
+clap = { version = "3.1.5", features = ["cargo"] }
 dirs-next = "2.0.0"
 num_cpus = "1.16.0"
 solana-clap-utils = "1.17.4"
