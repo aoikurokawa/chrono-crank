@@ -39,6 +39,31 @@ pub enum Command {
             help = "Do not display seed phrase. Useful when piping output to other programs that prompt for user input, like gpg"
         )]
         silent: Option<String>,
+
+        #[arg(
+            long,
+            value_name = "DERIVATION_PATH",
+            help = "Derivation path. All indexes will be promoted to hardened. \
+            If arg is not presented then derivation path will not be used. \
+            If arg is presented with empty DERIVATION_PATH value then m/44'/501'/0'/0' will be used."
+        )]
+        derivation_path: Option<PathBuf>,
+
+        #[arg(
+            long,
+            value_parser = ["12", "15", "18", "21", "24"],
+            default_value = "12",
+            value_name = "NUMBER",
+            help = "Specify the number of words that will be present in the generated seed phrase"
+        )]
+        word_count: Option<usize>,
+
+        #[arg(
+            long = "no-bip39-pasphrase",
+            alias = "no-passphrase",
+            help = "Do not prompt for a BIP39 passphrase"
+        )]
+        no_bip39_passphrase: Option<bool>,
     },
 
     /// Grind for a verify keypairs

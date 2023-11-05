@@ -1,7 +1,7 @@
 use std::{
     collections::HashSet,
     error,
-    path::PathBuf,
+    path::{Path, PathBuf},
     rc::Rc,
     sync::atomic::{AtomicBool, AtomicU64},
     sync::{atomic::Ordering, Arc},
@@ -25,7 +25,7 @@ use solana_clap_v3_utils::{
         no_outfile_arg, KeyGenerationCommonArgs, NO_OUTFILE_ARG,
     },
     keypair::{
-        keypair_from_path, keypair_from_seed_phrase, signer_from_path,
+        keypair_from_path, keypair_from_seed_phrase, prompt_passphrase, signer_from_path,
         SKIP_SEED_PHRASE_VALIDATION_ARG,
     },
     DisplayError,
@@ -33,6 +33,7 @@ use solana_clap_v3_utils::{
 use solana_cli_config::Config;
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use solana_sdk::{
+    derivation_path::DerivationPath,
     instruction::{AccountMeta, Instruction},
     message::Message,
     pubkey::{write_pubkey_file, Pubkey},
@@ -45,20 +46,113 @@ use solana_sdk::{
 
 fn main() -> Result<(), Box<dyn error::Error>> {
     let cli = Cli::parse();
+    let default_num_threads = num_cpus::get().to_string();
 
     match &cli.command {
         Command::New {
             outfile,
             force,
             silent,
-        } => {}
-        Command::Grind {} => {}
-        Command::Pubkey {} => {}
+            derivation_path,
+            word_count,
+            no_bip39_passphrase,
+        } => {
+            let mut path = dirs_next::home_dir().expect("home directory");
+            let outfile = if let Some(outfile) = outfile {
+                Some(outfile)
+            } else if matches.is_present(NO_OUTFILE_ARG.name) {
+                None
+            } else {
+                path.extend([".config", "solana", "id.json"]);
+                Some(path.to_str().unwrap())
+            };
+
+            match outfile {
+                // Some(STDOUT_OUTFILE_TOKEN) => (),
+                Some(outfile) => {
+                    if force.is_none() && outfile.exists() {
+                        let err_msg = format!(
+                            "Refusing to overwrite {} without --force flag",
+                            outfile.to_str().unwrap()
+                        );
+                        return Err(err_msg.into());
+                    }
+                    // *outfile
+                }
+                None => {
+                    // path.extend([".config", "solana", "id.json"]);
+                    // path.to_str().unwrap();
+                    // path
+                }
+            };
+
+            let word_count = word_count.unwrap();
+            let mnemonic_type = MnemonicType::for_word_count(word_count)?;
+            // let language = acquire_language(matches);
+
+            if silent.is_none() {
+                println!("Generating a new keypair");
+            }
+
+            // TODO: Only accept Engilish for now
+            let mnemonic = Mnemonic::new(mnemonic_type, bip39::Language::English);
+
+            let (passphrase, passphrase_message) = match *no_bip39_passphrase {
+                Some(no_passphrase) if no_passphrase => ("".to_string(), "".to_string()),
+                _ => {
+                    match prompt_passphrase(
+                        "\nFor added security, enter a BIP39 passphrase\n\
+             \nNOTE! This passphrase improves security of the recovery seed phrase NOT the\n\
+             keypair file itself, which is stored as insecure plain text\n\
+             \nBIP39 Passphrase (empty for none): ",
+                    ) {
+                        Ok(passphrase) => {
+                            println!();
+                            (passphrase, " and your BIP39 passphrase".to_string())
+                        }
+                        Err(_e) => ("".to_string(), "".to_string()),
+                    }
+                }
+            };
+
+            let seed = Seed::new(&mnemonic, &passphrase);
+            let derivation_path = if let Some(path) = derivation_path {
+                Some(DerivationPath::from_absolute_path_str(
+                    path.to_str().unwrap(),
+                )?)
+            } else {
+                None
+            };
+
+            let keypair = match derivation_path {
+                Some(_) => keypair_from_seed_and_derivation_path(seed.as_bytes(), derivation_path)?,
+                None => keypair_from_seed(seed.as_bytes())?,
+            };
+
+            if let Some(outfile) = outfile {
+                output_keypair(&keypair, outfile, "new")
+                    .map_err(|err| format!("Unable to write {outfile}: {err}"))?;
+            }
+
+            if !silent {
+                let phrase = mnemonic.phrase();
+                let divider = String::from_utf8(vec![b'='; phrase.len()]).unwrap();
+                println!("{}\npubkey: {}\n{}\nSave this seed phrase{} to recover your new keypair:\n{}\n{}",
+                                 &divider,
+                                 keypair.pubkey(),
+                                 &divider,
+                                 passphrase_message,
+                                 phrase,
+                                 &divider
+                             );
+            }
+        }
+        Command::Grind { .. } => {}
+        Command::Pubkey { .. } => {}
         Command::Verify { .. } => {}
         Command::Recover {} => {}
     }
 
-    let default_num_threads = num_cpus::get().to_string();
     // let matches = app(&default_num_threads, solana_version::version!())
     //     .try_get_matches()
     //     .unwrap_or_else(|e| e.exit());
