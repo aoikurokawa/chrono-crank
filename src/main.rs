@@ -43,7 +43,7 @@ use solana_sdk::{
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
-struct Args {
+struct Cli {
     #[command(subcommand)]
     command: Command,
 }
@@ -51,18 +51,26 @@ struct Args {
 #[derive(Debug, Subcommand)]
 enum Command {
     Pubkey {},
-    New {},
+    New {
+        #[arg(short, long, value_name = "FILEPATH", help = "Path to generated file")]
+        outfile: String,
+
+        #[arg(short, long, help = "Path to generated file")]
+        force: String,
+
+        #[arg(short, long, help = "Do not display seed phrase. Useful when piping output to other programs that prompt for user input, like gpg")]
+        silent: String,
+    },
     Recover {},
     Grind {},
     Verify {},
 }
 
 fn main() -> Result<(), Box<dyn error::Error>> {
-    let args = Args::parse();
+    let cli = Cli::parse();
 
-    match args.command {
-        Command::New {  } => {
-        }
+    match cli.command {
+        Command::New {} => {}
     }
     let default_num_threads = num_cpus::get().to_string();
     let matches = app(&default_num_threads, solana_version::version!())
