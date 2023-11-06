@@ -84,7 +84,6 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
             let word_count = word_count.parse::<usize>()?;
             let mnemonic_type = MnemonicType::for_word_count(word_count)?;
-            // let language = acquire_language(matches);
 
             if !silent {
                 println!("Generating a new keypair");
@@ -178,61 +177,6 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 //                 write_pubkey_file(outfile, pubkey)?;
 //             } else {
 //                 println!("{pubkey}");
-//             }
-//         }
-//         ("new", matches) => {
-//             let mut path = dirs_next::home_dir().expect("home directory");
-//             let outfile = if matches.is_present("outfile") {
-//                 matches.value_of("outfile")
-//             } else if matches.is_present(NO_OUTFILE_ARG.name) {
-//                 None
-//             } else {
-//                 path.extend([".config", "solana", "id.json"]);
-//                 Some(path.to_str().unwrap())
-//             };
-//
-//             match outfile {
-//                 Some(STDOUT_OUTFILE_TOKEN) => (),
-//                 Some(outfile) => check_for_overwrite(outfile, matches)?,
-//                 None => (),
-//             }
-//
-//             let word_count = matches.value_of_t(WORD_COUNT_ARG.name).unwrap();
-//             let mnemonic_type = MnemonicType::for_word_count(word_count)?;
-//             let language = acquire_language(matches);
-//
-//             let silent = matches.is_present("silent");
-//             if !silent {
-//                 println!("Generating a new keypair");
-//             }
-//
-//             let derivation_path = acquire_derivation_path(matches)?;
-//
-//             let mnemonic = Mnemonic::new(mnemonic_type, language);
-//             let (passphrase, passphrase_message) = acquire_passphrase_and_message(matches)?;
-//
-//             let seed = Seed::new(&mnemonic, &passphrase);
-//             let keypair = match derivation_path {
-//                 Some(_) => keypair_from_seed_and_derivation_path(seed.as_bytes(), derivation_path)?,
-//                 None => keypair_from_seed(seed.as_bytes())?,
-//             };
-//
-//             if let Some(outfile) = outfile {
-//                 output_keypair(&keypair, outfile, "new")
-//                     .map_err(|err| format!("Unable to write {outfile}: {err}"))?;
-//             }
-//
-//             if !silent {
-//                 let phrase = mnemonic.phrase();
-//                 let divider = String::from_utf8(vec![b'='; phrase.len()]).unwrap();
-//                 println!("{}\npubkey: {}\n{}\nSave this seed phrase{} to recover your new keypair:\n{}\n{}",
-//                     &divider,
-//                     keypair.pubkey(),
-//                     &divider,
-//                     passphrase_message,
-//                     phrase,
-//                     &divider
-//                 );
 //             }
 //         }
 //         ("recover", matches) => {
