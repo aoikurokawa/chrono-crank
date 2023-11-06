@@ -61,7 +61,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             let mut path = dirs_next::home_dir().expect("home directory");
             let outfile = if let Some(outfile) = outfile {
                 Some(outfile)
-            } else if no_outfile.is_some() {
+            } else if !no_outfile {
                 None
             } else {
                 path.extend([".config", "solana", "id.json"]);
@@ -86,19 +86,16 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             let mnemonic_type = MnemonicType::for_word_count(word_count)?;
             // let language = acquire_language(matches);
 
-            let silent = if let Some(silent) = silent {
+            if !silent {
                 println!("Generating a new keypair");
-                *silent
-            } else {
-                false
-            };
+            }
 
             // TODO: Only accept Engilish for now
             let mnemonic = Mnemonic::new(mnemonic_type, bip39::Language::English);
 
-            let (passphrase, passphrase_message) = match *no_bip39_passphrase {
-                Some(no_passphrase) if no_passphrase => ("".to_string(), "".to_string()),
-                _ => {
+            let (passphrase, passphrase_message) = if *no_bip39_passphrase {
+                 ("".to_string(), "".to_string())
+                } else  {
                     match prompt_passphrase(
                         "\nFor added security, enter a BIP39 passphrase\n\
              \nNOTE! This passphrase improves security of the recovery seed phrase NOT the\n\
@@ -111,7 +108,6 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         }
                         Err(_e) => ("".to_string(), "".to_string()),
                     }
-                }
             };
 
             let seed = Seed::new(&mnemonic, &passphrase);

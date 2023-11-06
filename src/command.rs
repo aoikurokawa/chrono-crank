@@ -38,7 +38,7 @@ pub enum Command {
             long,
             help = "Do not display seed phrase. Useful when piping output to other programs that prompt for user input, like gpg"
         )]
-        silent: Option<bool>,
+        silent: bool,
 
         #[arg(
             long,
@@ -59,17 +59,17 @@ pub enum Command {
         word_count: String,
 
         #[arg(
-            long = "no-bip39-pasphrase",
+            long = "no-bip39-passphrase",
             alias = "no-passphrase",
             help = "Do not prompt for a BIP39 passphrase"
         )]
-        no_bip39_passphrase: Option<bool>,
+        no_bip39_passphrase: bool,
 
         #[arg(
             long = "no-outfile",
             help = "Onlyt print a seed phrase and pubkey. Do not output a keypair file"
         )]
-        no_outfile: Option<bool>,
+        no_outfile: bool,
     },
 
     /// Grind for a verify keypairs
