@@ -56,20 +56,21 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             derivation_path,
             word_count,
             no_bip39_passphrase,
+            no_outfile,
         } => {
             let mut path = dirs_next::home_dir().expect("home directory");
             let outfile = if let Some(outfile) = outfile {
                 Some(outfile)
-            } else if matches.is_present(NO_OUTFILE_ARG.name) {
+            } else if no_outfile.is_some() {
                 None
             } else {
                 path.extend([".config", "solana", "id.json"]);
-                Some(path.to_str().unwrap())
+                Some(&path)
             };
 
             match outfile {
-                // Some(STDOUT_OUTFILE_TOKEN) => (),
-                Some(outfile) => {
+                // Some(PathBuf::from(STDOUT_OUTFILE_TOKEN)) => (),
+                Some(ref outfile) => {
                     if force.is_none() && outfile.exists() {
                         let err_msg = format!(
                             "Refusing to overwrite {} without --force flag",
@@ -77,22 +78,20 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         );
                         return Err(err_msg.into());
                     }
-                    // *outfile
                 }
-                None => {
-                    // path.extend([".config", "solana", "id.json"]);
-                    // path.to_str().unwrap();
-                    // path
-                }
+                None => {}
             };
 
-            let word_count = word_count.unwrap();
+            let word_count = word_count.parse::<usize>()?;
             let mnemonic_type = MnemonicType::for_word_count(word_count)?;
             // let language = acquire_language(matches);
 
-            if silent.is_none() {
+            let silent = if let Some(silent) = silent {
                 println!("Generating a new keypair");
-            }
+                *silent
+            } else {
+                false
+            };
 
             // TODO: Only accept Engilish for now
             let mnemonic = Mnemonic::new(mnemonic_type, bip39::Language::English);
@@ -130,8 +129,9 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             };
 
             if let Some(outfile) = outfile {
-                output_keypair(&keypair, outfile, "new")
-                    .map_err(|err| format!("Unable to write {outfile}: {err}"))?;
+                output_keypair(&keypair, outfile.to_str().unwrap(), "new").map_err(|err| {
+                    format!("Unable to write {}: {err}", outfile.to_str().unwrap())
+                })?;
             }
 
             if !silent {
