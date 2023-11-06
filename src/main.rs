@@ -47,6 +47,7 @@ use solana_sdk::{
 fn main() -> Result<(), Box<dyn error::Error>> {
     let cli = Cli::parse();
     let default_num_threads = num_cpus::get().to_string();
+    let mut wallet_manager = None;
 
     match &cli.command {
         Command::New {
@@ -143,7 +144,23 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             }
         }
         Command::Grind { .. } => {}
-        Command::Pubkey { .. } => {}
+        Command::Pubkey {
+            outfile,
+            keypair,
+            force,
+            skip_seed_phrase_validation,
+        } => {
+            let pubkey =
+                get_keypair_from_matches(matches, config, &mut wallet_manager)?.try_pubkey()?;
+
+            if matches.is_present("outfile") {
+                let outfile = matches.value_of("outfile").unwrap();
+                check_for_overwrite(outfile, matches)?;
+                write_pubkey_file(outfile, pubkey)?;
+            } else {
+                println!("{pubkey}");
+            }
+        }
         Command::Verify { .. } => {}
         Command::Recover {} => {}
     }
@@ -168,16 +185,6 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 //
 //     match subcommand {
 //         ("pubkey", matches) => {
-//             let pubkey =
-//                 get_keypair_from_matches(matches, config, &mut wallet_manager)?.try_pubkey()?;
-//
-//             if matches.is_present("outfile") {
-//                 let outfile = matches.value_of("outfile").unwrap();
-//                 check_for_overwrite(outfile, matches)?;
-//                 write_pubkey_file(outfile, pubkey)?;
-//             } else {
-//                 println!("{pubkey}");
-//             }
 //         }
 //         ("recover", matches) => {
 //             let mut path = dirs_next::home_dir().expect("home directory");
@@ -428,24 +435,24 @@ struct GrindMatch {
     count: AtomicU64,
 }
 
-// fn get_keypair_from_matches(
-//     matches: &ArgMatches,
-//     config: Config,
-//     wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
-// ) -> Result<Box<dyn Signer>, Box<dyn error::Error>> {
-//     let mut path = dirs_next::home_dir().expect("home directory");
-//     let path = if let Some(keypair) = matches.get_one::<String>("keypair") {
-//         // matches.value_of("keypair").unwrap()
-//         keypair
-//     } else if !config.keypair_path.is_empty() {
-//         &config.keypair_path
-//     } else {
-//         path.extend([".config", "solana", "id.json"]);
-//         path.to_str().unwrap()
-//     };
-//
-//     signer_from_path(matches, path, "pubkey_recovery", wallet_manager)
-// }
+fn get_keypair_from_matches(
+    matches: &ArgMatches,
+    config: Config,
+    wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
+) -> Result<Box<dyn Signer>, Box<dyn error::Error>> {
+    let mut path = dirs_next::home_dir().expect("home directory");
+    let path = if let Some(keypair) = matches.get_one::<String>("keypair") {
+        // matches.value_of("keypair").unwrap()
+        keypair
+    } else if !config.keypair_path.is_empty() {
+        &config.keypair_path
+    } else {
+        path.extend([".config", "solana", "id.json"]);
+        path.to_str().unwrap()
+    };
+
+    signer_from_path(matches, path, "pubkey_recovery", wallet_manager)
+}
 
 fn output_keypair(
     keypair: &Keypair,
