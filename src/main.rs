@@ -71,7 +71,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             match outfile {
                 // Some(PathBuf::from(STDOUT_OUTFILE_TOKEN)) => (),
                 Some(ref outfile) => {
-                    if force.is_none() && outfile.exists() {
+                    if !force && outfile.exists() {
                         let err_msg = format!(
                             "Refusing to overwrite {} without --force flag",
                             outfile.to_str().unwrap()

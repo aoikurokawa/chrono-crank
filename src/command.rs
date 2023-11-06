@@ -31,7 +31,7 @@ pub enum Command {
         outfile: Option<PathBuf>,
 
         #[arg(short, long, help = "Path to generated file")]
-        force: Option<String>,
+        force: bool,
 
         #[arg(
             short,
