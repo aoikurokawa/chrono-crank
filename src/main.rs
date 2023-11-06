@@ -94,20 +94,20 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             let mnemonic = Mnemonic::new(mnemonic_type, bip39::Language::English);
 
             let (passphrase, passphrase_message) = if *no_bip39_passphrase {
-                 ("".to_string(), "".to_string())
-                } else  {
-                    match prompt_passphrase(
-                        "\nFor added security, enter a BIP39 passphrase\n\
+                ("".to_string(), "".to_string())
+            } else {
+                match prompt_passphrase(
+                    "\nFor added security, enter a BIP39 passphrase\n\
              \nNOTE! This passphrase improves security of the recovery seed phrase NOT the\n\
              keypair file itself, which is stored as insecure plain text\n\
              \nBIP39 Passphrase (empty for none): ",
-                    ) {
-                        Ok(passphrase) => {
-                            println!();
-                            (passphrase, " and your BIP39 passphrase".to_string())
-                        }
-                        Err(_e) => ("".to_string(), "".to_string()),
+                ) {
+                    Ok(passphrase) => {
+                        println!();
+                        (passphrase, " and your BIP39 passphrase".to_string())
                     }
+                    Err(_e) => ("".to_string(), "".to_string()),
+                }
             };
 
             let seed = Seed::new(&mnemonic, &passphrase);
