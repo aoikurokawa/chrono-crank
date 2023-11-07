@@ -11,7 +11,7 @@ use std::{
 
 use bip39::{Mnemonic, MnemonicType, Seed};
 use clap::{value_parser, Arg, ArgMatches, Parser, Subcommand};
-use keygen::command::{Cli, Command};
+use keygen::{command::{Cli, Command}, keypair::SignerSource};
 use solana_clap_v3_utils::{
     input_parsers::STDOUT_OUTFILE_TOKEN,
     input_validators::is_prompt_signer_source,
@@ -25,8 +25,8 @@ use solana_clap_v3_utils::{
         no_outfile_arg, KeyGenerationCommonArgs, NO_OUTFILE_ARG,
     },
     keypair::{
-        keypair_from_path, keypair_from_seed_phrase, prompt_passphrase, signer_from_path,
-        SKIP_SEED_PHRASE_VALIDATION_ARG,
+        keypair_from_path, keypair_from_seed_phrase, prompt_passphrase,
+        SKIP_SEED_PHRASE_VALIDATION_ARG, SignerFromPathConfig,
     },
     DisplayError,
 };
@@ -436,14 +436,14 @@ struct GrindMatch {
 }
 
 fn get_keypair_from_matches(
-    matches: &ArgMatches,
+    keypair: Option<String>,
     config: Config,
     wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
 ) -> Result<Box<dyn Signer>, Box<dyn error::Error>> {
     let mut path = dirs_next::home_dir().expect("home directory");
-    let path = if let Some(keypair) = matches.get_one::<String>("keypair") {
+    let path = if let Some(keypair) = keypair {
         // matches.value_of("keypair").unwrap()
-        keypair
+        &keypair
     } else if !config.keypair_path.is_empty() {
         &config.keypair_path
     } else {
@@ -451,7 +451,16 @@ fn get_keypair_from_matches(
         path.to_str().unwrap()
     };
 
-    signer_from_path(matches, path, "pubkey_recovery", wallet_manager)
+    signer_from_path(path, "pubkey_recovery", wallet_manager)
+}
+
+fn signer_from_path() -> Result<Box<dyn Signer>, Box<dyn error::Error>> {
+    let config = SignerFromPathConfig::default();
+
+}
+
+fn signer_from_path_with_config() -> Result<Box<dyn Signer>, Box<dyn error::Error>> {
+    let SignerSource
 }
 
 fn output_keypair(
