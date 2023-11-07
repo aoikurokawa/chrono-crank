@@ -1,12 +1,13 @@
 use bip39::{Language, Mnemonic, Seed};
 use rpassword::prompt_password;
-use solana_clap_v3_utils::keypair::{prompt_passphrase, presigner_from_pubkey_sigs};
+use solana_clap_v3_utils::keypair::{presigner_from_pubkey_sigs, prompt_passphrase};
 use solana_remote_wallet::locator::LocatorError as RemoteWalletLocatorError;
 use solana_sdk::{
     derivation_path::{DerivationPath, DerivationPathError},
     pubkey::Pubkey,
     signature::{
-        generate_seed_from_seed_phrase_and_passphrase, read_keypair, read_keypair_file, Keypair, NullSigner, Signature,
+        generate_seed_from_seed_phrase_and_passphrase, read_keypair, read_keypair_file, Keypair,
+        NullSigner, Signature,
     },
     signer::{EncodableKey, EncodableKeypair, SeedDerivable, Signer},
 };
@@ -169,6 +170,11 @@ fn parse_signer_source<S: AsRef<str>>(source: S) -> Result<SignerSource, SignerS
             source.to_string()
         }
     };
+    const SIGNER_SOURCE_PROMPT: &str = "prompt";
+    const SIGNER_SOURCE_FILEPATH: &str = "file";
+    const SIGNER_SOURCE_USB: &str = "usb";
+    const SIGNER_SOURCE_STDIN: &str = "stdin";
+    const SIGNER_SOURCE_PUBKEY: &str = "pubkey";
     match uriparse::URIReference::try_from(source.as_str()) {
         Err(_) => Err(SignerSourceError::UnrecognizedSource),
         Ok(uri) => {
@@ -200,6 +206,8 @@ fn parse_signer_source<S: AsRef<str>>(source: S) -> Result<SignerSource, SignerS
                     }
                 }
             } else {
+                const STDOUT_OUTFILE_TOKEN: &str = "-";
+                const ASK_KEYWORD: &str = "ASK";
                 match source.as_str() {
                     STDOUT_OUTFILE_TOKEN => Ok(SignerSource::new(SignerSourceKind::Stdin)),
                     ASK_KEYWORD => Ok(SignerSource::new_legacy(SignerSourceKind::Prompt)),
@@ -207,7 +215,7 @@ fn parse_signer_source<S: AsRef<str>>(source: S) -> Result<SignerSource, SignerS
                         Ok(pubkey) => {
                             // Ok(SignerSource::new(SignerSourceKind::Pubkey(pubkey)))
                             Err(SignerSourceError::UnrecognizedSource)
-                        },
+                        }
                         Err(_) => std::fs::metadata(source.as_str())
                             .map(|_| SignerSource::new(SignerSourceKind::Filepath(source)))
                             .map_err(|err| err.into()),
