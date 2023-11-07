@@ -1,40 +1,23 @@
 use std::{
     collections::HashSet,
     error,
-    path::{Path, PathBuf},
-    rc::Rc,
-    sync::atomic::{AtomicBool, AtomicU64},
-    sync::{atomic::Ordering, Arc},
-    thread,
-    time::Instant,
+    sync::atomic::AtomicU64,
+    sync::{atomic::Ordering},
 };
 
 use bip39::{Mnemonic, MnemonicType, Seed};
-use clap::{value_parser, Arg, ArgMatches, Parser, Subcommand};
+use clap:: Parser;
 use keygen::{
     command::{Cli, Command},
-    keypair::{keypair_from_path, signer_from_path_with_config, SignerSource},
+    keypair::{keypair_from_path, signer_from_path_with_config},
 };
 use solana_clap_v3_utils::{
     input_parsers::STDOUT_OUTFILE_TOKEN,
-    input_validators::is_prompt_signer_source,
-    keygen::{
-        check_for_overwrite,
-        derivation_path::{acquire_derivation_path, derivation_path_arg},
-        mnemonic::{
-            acquire_language, acquire_passphrase_and_message, no_passphrase_and_message,
-            WORD_COUNT_ARG,
-        },
-        no_outfile_arg, KeyGenerationCommonArgs, NO_OUTFILE_ARG,
-    },
     keypair::{
         keypair_from_seed_phrase, prompt_passphrase, SignerFromPathConfig,
-        SKIP_SEED_PHRASE_VALIDATION_ARG,
     },
-    DisplayError,
 };
 use solana_cli_config::Config;
-use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use solana_sdk::{
     derivation_path::DerivationPath,
     instruction::{AccountMeta, Instruction},
@@ -244,21 +227,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 }
 
 // fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
-//     let config = if let Some(config_file) = matches.value_of("config_file") {
-//         Config::load(config_file).unwrap_or_default()
-//     } else {
-//         Config::default()
-//     };
-//
-//     let mut wallet_manager = None;
-//
-//     let subcommand = matches.subcommand().unwrap();
-//
 //     match subcommand {
-//         ("pubkey", matches) => {
-//         }
-//         ("recover", matches) => {
-//         }
 //         ("grind", matches) => {
 //             let ignore_case = matches.is_present("ignore_case");
 //
@@ -440,9 +409,6 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 //                 thread_handles.join().unwrap();
 //             }
 //         }
-//         ("verify", matches) => {
-//         }
-//         _ => unreachable!(),
 //     }
 //
 //     Ok(())
