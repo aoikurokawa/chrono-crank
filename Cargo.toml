@@ -15,5 +15,7 @@ solana-cli-config = "1.17.4"
 solana-remote-wallet = "1.17.4"
 solana-sdk = "1.17.4"
 solana-version = "1.17.4"
+rpassword = "7.2.0"
+thiserror = "1.0.50"
 tiny-bip39 = "0.8.2"
-
+uriparse = "0.6.4"
