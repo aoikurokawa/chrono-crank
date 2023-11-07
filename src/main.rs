@@ -175,7 +175,35 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 println!("{pubkey}");
             }
         }
-        Command::Verify { .. } => {}
+        Command::Verify {
+            keypair,
+            pubkey,
+            skip_seed_phrase_validation,
+        } => {
+            let keypair = get_keypair_from_matches(
+                *skip_seed_phrase_validation,
+                keypair.clone(),
+                config,
+            )?;
+            let simple_message = Message::new(
+                &[Instruction::new_with_bincode(
+                    Pubkey::default(),
+                    &0,
+                    vec![AccountMeta::new(keypair.pubkey(), true)],
+                )],
+                Some(&keypair.pubkey()),
+            )
+            .serialize();
+            let signature = keypair.try_sign_message(&simple_message)?;
+            let pubkey_bs58 = &*pubkey;
+            let pubkey = bs58::decode(pubkey_bs58).into_vec().unwrap();
+            if signature.verify(&pubkey, &simple_message) {
+                println!("Verification for public key: {pubkey_bs58}: Success");
+            } else {
+                let err_msg = format!("Verification for public key: {pubkey_bs58}: Failed");
+                return Err(err_msg.into());
+            }
+        }
         Command::Recover {} => {}
     }
 
@@ -404,25 +432,6 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 //             }
 //         }
 //         ("verify", matches) => {
-//             let keypair = get_keypair_from_matches(matches, config, &mut wallet_manager)?;
-//             let simple_message = Message::new(
-//                 &[Instruction::new_with_bincode(
-//                     Pubkey::default(),
-//                     &0,
-//                     vec![AccountMeta::new(keypair.pubkey(), true)],
-//                 )],
-//                 Some(&keypair.pubkey()),
-//             )
-//             .serialize();
-//             let signature = keypair.try_sign_message(&simple_message)?;
-//             let pubkey_bs58 = matches.value_of("pubkey").unwrap();
-//             let pubkey = bs58::decode(pubkey_bs58).into_vec().unwrap();
-//             if signature.verify(&pubkey, &simple_message) {
-//                 println!("Verification for public key: {pubkey_bs58}: Success");
-//             } else {
-//                 let err_msg = format!("Verification for public key: {pubkey_bs58}: Failed");
-//                 return Err(err_msg.into());
-//             }
 //         }
 //         _ => unreachable!(),
 //     }

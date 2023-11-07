@@ -25,6 +25,12 @@ pub enum Command {
             help = "Filepath or URL to a keypair"
         )]
         keypair: Option<String>,
+
+        #[arg(
+            long = "skip-seed-phrase-validation",
+            help = "Skip validation of seed phrases. Use this if your phrase does not use the BIP39 official English word list"
+        )]
+        skip_seed_phrase_validation: bool,
     },
 
     /// Generate new keypair file from a random seed phrase and optional BIP39 passphrase
