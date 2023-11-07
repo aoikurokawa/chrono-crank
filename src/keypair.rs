@@ -137,6 +137,20 @@ pub fn signer_from_path_with_config(
 //     })
 // }
 
+pub fn keypair_from_path(
+    skip_validation: bool,
+    path: &str,
+    keypair_name: &str,
+    confirm_pubkey: bool,
+) -> Result<Keypair, Box<dyn error::Error>> {
+    // let skip_validation = matches.try_contains_id(SKIP_SEED_PHRASE_VALIDATION_ARG.name)?;
+    let keypair = encodable_key_from_path(path, keypair_name, skip_validation)?;
+    if confirm_pubkey {
+        confirm_encodable_keypair_pubkey(&keypair, "pubkey");
+    }
+    Ok(keypair)
+}
+
 #[derive(Debug, Error)]
 pub(crate) enum SignerSourceError {
     #[error("unrecognized signer source")]
@@ -291,6 +305,47 @@ fn encodable_key_from_seed_phrase<K: EncodableKey + SeedDerivable>(
     };
     Ok(key)
 }
+
+fn encodable_key_from_path<K: EncodableKey + SeedDerivable>(
+    path: &str,
+    keypair_name: &str,
+    skip_validation: bool,
+) -> Result<K, Box<dyn error::Error>> {
+    let SignerSource {
+        kind,
+        derivation_path,
+        legacy,
+    } = parse_signer_source(path)?;
+    match kind {
+        SignerSourceKind::Prompt => Ok(encodable_key_from_seed_phrase(
+            keypair_name,
+            skip_validation,
+            derivation_path,
+            legacy,
+        )?),
+        SignerSourceKind::Filepath(path) => match K::read_from_file(&path) {
+            Err(e) => Err(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                format!(
+                    "could not read keypair file \"{path}\". \
+                    Run \"solana-keygen new\" to create a keypair file: {e}"
+                ),
+            )
+            .into()),
+            Ok(file) => Ok(file),
+        },
+        SignerSourceKind::Stdin => {
+            let mut stdin = std::io::stdin();
+            Ok(K::read(&mut stdin)?)
+        }
+        _ => Err(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            format!("signer of type `{kind:?}` does not support Keypair output"),
+        )
+        .into()),
+    }
+}
+
 
 fn sanitize_seed_phrase(seed_phrase: &str) -> String {
     seed_phrase

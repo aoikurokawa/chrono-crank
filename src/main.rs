@@ -1,40 +1,23 @@
 use std::{
     collections::HashSet,
     error,
-    path::{Path, PathBuf},
-    rc::Rc,
-    sync::atomic::{AtomicBool, AtomicU64},
-    sync::{atomic::Ordering, Arc},
-    thread,
-    time::Instant,
+    sync::atomic::AtomicU64,
+    sync::{atomic::Ordering},
 };
 
 use bip39::{Mnemonic, MnemonicType, Seed};
-use clap::{value_parser, Arg, ArgMatches, Parser, Subcommand};
+use clap:: Parser;
 use keygen::{
     command::{Cli, Command},
-    keypair::{signer_from_path_with_config, SignerSource},
+    keypair::{keypair_from_path, signer_from_path_with_config},
 };
 use solana_clap_v3_utils::{
     input_parsers::STDOUT_OUTFILE_TOKEN,
-    input_validators::is_prompt_signer_source,
-    keygen::{
-        check_for_overwrite,
-        derivation_path::{acquire_derivation_path, derivation_path_arg},
-        mnemonic::{
-            acquire_language, acquire_passphrase_and_message, no_passphrase_and_message,
-            WORD_COUNT_ARG,
-        },
-        no_outfile_arg, KeyGenerationCommonArgs, NO_OUTFILE_ARG,
-    },
     keypair::{
-        keypair_from_path, keypair_from_seed_phrase, prompt_passphrase, SignerFromPathConfig,
-        SKIP_SEED_PHRASE_VALIDATION_ARG,
+        keypair_from_seed_phrase, prompt_passphrase, SignerFromPathConfig,
     },
-    DisplayError,
 };
 use solana_cli_config::Config;
-use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use solana_sdk::{
     derivation_path::DerivationPath,
     instruction::{AccountMeta, Instruction},
@@ -180,11 +163,8 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             pubkey,
             skip_seed_phrase_validation,
         } => {
-            let keypair = get_keypair_from_matches(
-                *skip_seed_phrase_validation,
-                keypair.clone(),
-                config,
-            )?;
+            let keypair =
+                get_keypair_from_matches(*skip_seed_phrase_validation, keypair.clone(), config)?;
             let simple_message = Message::new(
                 &[Instruction::new_with_bincode(
                     Pubkey::default(),
@@ -204,7 +184,39 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 return Err(err_msg.into());
             }
         }
-        Command::Recover {} => {}
+        Command::Recover {
+            outfile,
+            force,
+            prompt_signer,
+            skip_seed_phrase_validation,
+        } => {
+            let mut path = dirs_next::home_dir().expect("home directory");
+            let outfile = if let Some(outfile) = outfile {
+                outfile
+            } else {
+                path.extend([".config", "solana", "id.json"]);
+                &path
+            };
+
+            if outfile.to_str().unwrap() != STDOUT_OUTFILE_TOKEN {
+                if !force && outfile.exists() {
+                    let err_msg = format!(
+                        "Refusing to overwrite {} without --force flag",
+                        outfile.to_str().unwrap()
+                    );
+                    return Err(err_msg.into());
+                }
+            }
+
+            let keypair_name = "recover";
+            let keypair = if let Some(path) = prompt_signer {
+                keypair_from_path(*skip_seed_phrase_validation, path, keypair_name, true)?
+            } else {
+                let skip_validation = *skip_seed_phrase_validation;
+                keypair_from_seed_phrase(keypair_name, skip_validation, true, None, true)?
+            };
+            output_keypair(&keypair, outfile.to_str().unwrap(), "recovered")?
+        }
     }
 
     // let matches = app(&default_num_threads, solana_version::version!())
@@ -215,41 +227,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 }
 
 // fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
-//     let config = if let Some(config_file) = matches.value_of("config_file") {
-//         Config::load(config_file).unwrap_or_default()
-//     } else {
-//         Config::default()
-//     };
-//
-//     let mut wallet_manager = None;
-//
-//     let subcommand = matches.subcommand().unwrap();
-//
 //     match subcommand {
-//         ("pubkey", matches) => {
-//         }
-//         ("recover", matches) => {
-//             let mut path = dirs_next::home_dir().expect("home directory");
-//             let outfile = if matches.is_present("outfile") {
-//                 matches.value_of("outfile").unwrap()
-//             } else {
-//                 path.extend([".config", "solana", "id.json"]);
-//                 path.to_str().unwrap()
-//             };
-//
-//             if outfile != STDOUT_OUTFILE_TOKEN {
-//                 check_for_overwrite(outfile, matches)?;
-//             }
-//
-//             let keypair_name = "recover";
-//             let keypair = if let Some(path) = matches.value_of("prompt_signer") {
-//                 keypair_from_path(matches, path, keypair_name, true)?
-//             } else {
-//                 let skip_validation = matches.is_present(SKIP_SEED_PHRASE_VALIDATION_ARG.name);
-//                 keypair_from_seed_phrase(keypair_name, skip_validation, true, None, true)?
-//             };
-//             output_keypair(&keypair, outfile, "recovered")?
-//         }
 //         ("grind", matches) => {
 //             let ignore_case = matches.is_present("ignore_case");
 //
@@ -431,9 +409,6 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 //                 thread_handles.join().unwrap();
 //             }
 //         }
-//         ("verify", matches) => {
-//         }
-//         _ => unreachable!(),
 //     }
 //
 //     Ok(())
