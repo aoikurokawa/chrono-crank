@@ -11,7 +11,10 @@ use std::{
 
 use bip39::{Mnemonic, MnemonicType, Seed};
 use clap::{value_parser, Arg, ArgMatches, Parser, Subcommand};
-use keygen::command::{Cli, Command};
+use keygen::{
+    command::{Cli, Command},
+    keypair::{signer_from_path_with_config, SignerSource},
+};
 use solana_clap_v3_utils::{
     input_parsers::STDOUT_OUTFILE_TOKEN,
     input_validators::is_prompt_signer_source,
@@ -25,7 +28,7 @@ use solana_clap_v3_utils::{
         no_outfile_arg, KeyGenerationCommonArgs, NO_OUTFILE_ARG,
     },
     keypair::{
-        keypair_from_path, keypair_from_seed_phrase, prompt_passphrase, signer_from_path,
+        keypair_from_path, keypair_from_seed_phrase, prompt_passphrase, SignerFromPathConfig,
         SKIP_SEED_PHRASE_VALIDATION_ARG,
     },
     DisplayError,
@@ -47,6 +50,12 @@ use solana_sdk::{
 fn main() -> Result<(), Box<dyn error::Error>> {
     let cli = Cli::parse();
     let default_num_threads = num_cpus::get().to_string();
+    // let mut wallet_manager = None;
+    let config = if let Some(config_file) = &cli.config_file {
+        Config::load(config_file.to_str().unwrap()).unwrap_or_default()
+    } else {
+        Config::default()
+    };
 
     match &cli.command {
         Command::New {
@@ -143,7 +152,29 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             }
         }
         Command::Grind { .. } => {}
-        Command::Pubkey { .. } => {}
+        Command::Pubkey {
+            outfile,
+            keypair,
+            force,
+            skip_seed_phrase_validation,
+        } => {
+            let pubkey =
+                get_keypair_from_matches(*skip_seed_phrase_validation, keypair.clone(), config)?
+                    .try_pubkey()?;
+
+            if let Some(outfile) = outfile {
+                if !force && outfile.exists() {
+                    let err_msg = format!(
+                        "Refusing to overwrite {} without --force flag",
+                        outfile.to_str().unwrap()
+                    );
+                    return Err(err_msg.into());
+                }
+                write_pubkey_file(outfile.to_str().unwrap(), pubkey)?;
+            } else {
+                println!("{pubkey}");
+            }
+        }
         Command::Verify { .. } => {}
         Command::Recover {} => {}
     }
@@ -168,16 +199,6 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 //
 //     match subcommand {
 //         ("pubkey", matches) => {
-//             let pubkey =
-//                 get_keypair_from_matches(matches, config, &mut wallet_manager)?.try_pubkey()?;
-//
-//             if matches.is_present("outfile") {
-//                 let outfile = matches.value_of("outfile").unwrap();
-//                 check_for_overwrite(outfile, matches)?;
-//                 write_pubkey_file(outfile, pubkey)?;
-//             } else {
-//                 println!("{pubkey}");
-//             }
 //         }
 //         ("recover", matches) => {
 //             let mut path = dirs_next::home_dir().expect("home directory");
@@ -428,24 +449,33 @@ struct GrindMatch {
     count: AtomicU64,
 }
 
-// fn get_keypair_from_matches(
-//     matches: &ArgMatches,
-//     config: Config,
-//     wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
-// ) -> Result<Box<dyn Signer>, Box<dyn error::Error>> {
-//     let mut path = dirs_next::home_dir().expect("home directory");
-//     let path = if let Some(keypair) = matches.get_one::<String>("keypair") {
-//         // matches.value_of("keypair").unwrap()
-//         keypair
-//     } else if !config.keypair_path.is_empty() {
-//         &config.keypair_path
-//     } else {
-//         path.extend([".config", "solana", "id.json"]);
-//         path.to_str().unwrap()
-//     };
-//
-//     signer_from_path(matches, path, "pubkey_recovery", wallet_manager)
-// }
+fn get_keypair_from_matches(
+    skip_seed_phrase_validation: bool,
+    keypair: Option<String>,
+    config: Config,
+) -> Result<Box<dyn Signer>, Box<dyn error::Error>> {
+    let mut path = dirs_next::home_dir().expect("home directory");
+    let path = if let Some(keypair) = keypair {
+        // matches.value_of("keypair").unwrap()
+        keypair
+    } else if !config.keypair_path.is_empty() {
+        config.keypair_path
+    } else {
+        path.extend([".config", "solana", "id.json"]);
+        path.to_str().unwrap().to_string()
+    };
+
+    signer_from_path(skip_seed_phrase_validation, &path, "pubkey_recovery")
+}
+
+fn signer_from_path(
+    skip_seed_phrase_validation: bool,
+    path: &str,
+    keypair_name: &str,
+) -> Result<Box<dyn Signer>, Box<dyn error::Error>> {
+    let config = SignerFromPathConfig::default();
+    signer_from_path_with_config(skip_seed_phrase_validation, path, keypair_name)
+}
 
 fn output_keypair(
     keypair: &Keypair,

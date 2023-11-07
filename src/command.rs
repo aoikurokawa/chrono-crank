@@ -5,6 +5,8 @@ use clap::{Parser, Subcommand};
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 pub struct Cli {
+    pub config_file: Option<PathBuf>,
+
     #[command(subcommand)]
     pub command: Command,
 }
@@ -74,12 +76,6 @@ pub enum Command {
 
     /// Grind for a verify keypairs
     Grind {
-        #[arg(long, help = "Perform case insensitive matches")]
-        ignore_case: Option<bool>,
-    },
-
-    /// Display the pubkey from a keypair file
-    Pubkey {
         #[arg(
             long,
             value_name = "PREFIX:COUNT",
@@ -93,6 +89,32 @@ pub enum Command {
             help = "Saves specified number of keypairs whos public key ends with the indicated suffix\nExample: --ends-with ana:4\nSUFFIX type is Base58\nCOUNT type is u64"
         )]
         ends_with: String,
+
+        #[arg(long, help = "Perform case insensitive matches")]
+        ignore_case: bool,
+    },
+
+    /// Display the pubkey from a keypair file
+    Pubkey {
+        #[arg(
+            short,
+            long,
+            value_name = "KEYPAIR",
+            help = "Filepath or URL to a keypair"
+        )]
+        keypair: Option<String>,
+
+        #[arg(
+            long = "skip-seed-phrase-validation",
+            help = "Skip validation of seed phrases. Use this if your phrase does not use the BIP39 official English word list"
+        )]
+        skip_seed_phrase_validation: bool,
+
+        #[arg(short, long, value_name = "FILEPATH", help = "Path to generated file")]
+        outfile: Option<PathBuf>,
+
+        #[arg(short, long, help = "Overwrite the output file if it exists")]
+        force: bool,
     },
 
     /// Recover keypair from seed phrase and optional BIP39 passphrase

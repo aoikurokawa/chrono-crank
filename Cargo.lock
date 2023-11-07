@@ -1253,12 +1253,15 @@ dependencies = [
  "clap 4.4.7",
  "dirs-next",
  "num_cpus",
+ "rpassword",
  "solana-clap-v3-utils",
  "solana-cli-config",
  "solana-remote-wallet",
  "solana-sdk",
  "solana-version",
+ "thiserror",
  "tiny-bip39",
+ "uriparse",
 ]
 
 [[package]]
