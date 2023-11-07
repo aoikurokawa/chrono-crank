@@ -1,21 +1,14 @@
-use std::{
-    collections::HashSet,
-    error,
-    sync::atomic::AtomicU64,
-    sync::{atomic::Ordering},
-};
+use std::{collections::HashSet, error, sync::atomic::AtomicU64, sync::atomic::Ordering};
 
 use bip39::{Mnemonic, MnemonicType, Seed};
-use clap:: Parser;
+use clap::Parser;
 use keygen::{
     command::{Cli, Command},
     keypair::{keypair_from_path, signer_from_path_with_config},
 };
 use solana_clap_v3_utils::{
     input_parsers::STDOUT_OUTFILE_TOKEN,
-    keypair::{
-        keypair_from_seed_phrase, prompt_passphrase, SignerFromPathConfig,
-    },
+    keypair::{keypair_from_seed_phrase, prompt_passphrase, SignerFromPathConfig},
 };
 use solana_cli_config::Config;
 use solana_sdk::{
