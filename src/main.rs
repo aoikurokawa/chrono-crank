@@ -13,7 +13,7 @@ use bip39::{Mnemonic, MnemonicType, Seed};
 use clap::{value_parser, Arg, ArgMatches, Parser, Subcommand};
 use keygen::{
     command::{Cli, Command},
-    keypair::{signer_from_path_with_config, SignerSource},
+    keypair::{keypair_from_path, signer_from_path_with_config, SignerSource},
 };
 use solana_clap_v3_utils::{
     input_parsers::STDOUT_OUTFILE_TOKEN,
@@ -28,7 +28,7 @@ use solana_clap_v3_utils::{
         no_outfile_arg, KeyGenerationCommonArgs, NO_OUTFILE_ARG,
     },
     keypair::{
-        keypair_from_path, keypair_from_seed_phrase, prompt_passphrase, SignerFromPathConfig,
+        keypair_from_seed_phrase, prompt_passphrase, SignerFromPathConfig,
         SKIP_SEED_PHRASE_VALIDATION_ARG,
     },
     DisplayError,
@@ -180,11 +180,8 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             pubkey,
             skip_seed_phrase_validation,
         } => {
-            let keypair = get_keypair_from_matches(
-                *skip_seed_phrase_validation,
-                keypair.clone(),
-                config,
-            )?;
+            let keypair =
+                get_keypair_from_matches(*skip_seed_phrase_validation, keypair.clone(), config)?;
             let simple_message = Message::new(
                 &[Instruction::new_with_bincode(
                     Pubkey::default(),
@@ -204,7 +201,39 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 return Err(err_msg.into());
             }
         }
-        Command::Recover {} => {}
+        Command::Recover {
+            outfile,
+            force,
+            prompt_signer,
+            skip_seed_phrase_validation,
+        } => {
+            let mut path = dirs_next::home_dir().expect("home directory");
+            let outfile = if let Some(outfile) = outfile {
+                outfile
+            } else {
+                path.extend([".config", "solana", "id.json"]);
+                &path
+            };
+
+            if outfile.to_str().unwrap() != STDOUT_OUTFILE_TOKEN {
+                if !force && outfile.exists() {
+                    let err_msg = format!(
+                        "Refusing to overwrite {} without --force flag",
+                        outfile.to_str().unwrap()
+                    );
+                    return Err(err_msg.into());
+                }
+            }
+
+            let keypair_name = "recover";
+            let keypair = if let Some(path) = prompt_signer {
+                keypair_from_path(*skip_seed_phrase_validation, path, keypair_name, true)?
+            } else {
+                let skip_validation = *skip_seed_phrase_validation;
+                keypair_from_seed_phrase(keypair_name, skip_validation, true, None, true)?
+            };
+            output_keypair(&keypair, outfile.to_str().unwrap(), "recovered")?
+        }
     }
 
     // let matches = app(&default_num_threads, solana_version::version!())
@@ -229,26 +258,6 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 //         ("pubkey", matches) => {
 //         }
 //         ("recover", matches) => {
-//             let mut path = dirs_next::home_dir().expect("home directory");
-//             let outfile = if matches.is_present("outfile") {
-//                 matches.value_of("outfile").unwrap()
-//             } else {
-//                 path.extend([".config", "solana", "id.json"]);
-//                 path.to_str().unwrap()
-//             };
-//
-//             if outfile != STDOUT_OUTFILE_TOKEN {
-//                 check_for_overwrite(outfile, matches)?;
-//             }
-//
-//             let keypair_name = "recover";
-//             let keypair = if let Some(path) = matches.value_of("prompt_signer") {
-//                 keypair_from_path(matches, path, keypair_name, true)?
-//             } else {
-//                 let skip_validation = matches.is_present(SKIP_SEED_PHRASE_VALIDATION_ARG.name);
-//                 keypair_from_seed_phrase(keypair_name, skip_validation, true, None, true)?
-//             };
-//             output_keypair(&keypair, outfile, "recovered")?
 //         }
 //         ("grind", matches) => {
 //             let ignore_case = matches.is_present("ignore_case");

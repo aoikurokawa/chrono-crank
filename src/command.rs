@@ -124,5 +124,20 @@ pub enum Command {
     },
 
     /// Recover keypair from seed phrase and optional BIP39 passphrase
-    Recover {},
+    Recover {
+        #[arg(value_name = "KEYPAIR", help = "prompt: URI schme or `ASK` keyword")]
+        prompt_signer: Option<String>,
+
+        #[arg(short, long, value_name = "FILEPATH", help = "Path to generated file")]
+        outfile: Option<PathBuf>,
+
+        #[arg(short, long, help = "Overwrite the output file if it exists")]
+        force: bool,
+
+        #[arg(
+            long = "skip-seed-phrase-validation",
+            help = "Skip validation of seed phrases. Use this if your phrase does not use the BIP39 official English word list"
+        )]
+        skip_seed_phrase_validation: bool,
+    },
 }
