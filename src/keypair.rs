@@ -1,13 +1,12 @@
 use bip39::{Language, Mnemonic, Seed};
 use rpassword::prompt_password;
-use solana_clap_v3_utils::keypair::{presigner_from_pubkey_sigs, prompt_passphrase};
+use solana_clap_v3_utils::keypair::{prompt_passphrase};
 use solana_remote_wallet::locator::LocatorError as RemoteWalletLocatorError;
 use solana_sdk::{
     derivation_path::{DerivationPath, DerivationPathError},
     pubkey::Pubkey,
     signature::{
         generate_seed_from_seed_phrase_and_passphrase, read_keypair, read_keypair_file, Keypair,
-        NullSigner, Signature,
     },
     signer::{EncodableKey, EncodableKeypair, SeedDerivable, Signer},
 };
@@ -226,7 +225,7 @@ fn parse_signer_source<S: AsRef<str>>(source: S) -> Result<SignerSource, SignerS
                     STDOUT_OUTFILE_TOKEN => Ok(SignerSource::new(SignerSourceKind::Stdin)),
                     ASK_KEYWORD => Ok(SignerSource::new_legacy(SignerSourceKind::Prompt)),
                     _ => match Pubkey::from_str(source.as_str()) {
-                        Ok(pubkey) => {
+                        Ok(_pubkey) => {
                             // Ok(SignerSource::new(SignerSourceKind::Pubkey(pubkey)))
                             Err(SignerSourceError::UnrecognizedSource)
                         }
