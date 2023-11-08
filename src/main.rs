@@ -1,4 +1,14 @@
-use std::{collections::HashSet, error, sync::atomic::AtomicU64, sync::atomic::Ordering};
+use std::{
+    collections::HashSet,
+    error,
+    sync::atomic::Ordering,
+    sync::{
+        atomic::{AtomicBool, AtomicU64},
+        Arc,
+    },
+    thread,
+    time::Instant,
+};
 
 use bip39::{Mnemonic, MnemonicType, Seed};
 use clap::Parser;
@@ -25,7 +35,7 @@ use solana_sdk::{
 
 fn main() -> Result<(), Box<dyn error::Error>> {
     let cli = Cli::parse();
-    let default_num_threads = num_cpus::get().to_string();
+    let default_num_threads = num_cpus::get();
     // let mut wallet_manager = None;
     let config = if let Some(config_file) = &cli.config_file {
         Config::load(config_file.to_str().unwrap()).unwrap_or_default()
@@ -33,7 +43,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         Config::default()
     };
 
-    match &cli.command {
+    match cli.command {
         Command::New {
             outfile,
             force,
@@ -127,7 +137,206 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                              );
             }
         }
-        Command::Grind { .. } => {}
+        Command::Grind {
+            ignore_case,
+            starts_with,
+            ends_with,
+            starts_and_ends_with,
+            num_threads,
+            use_mnemonic,
+            derivation_path,
+            word_count,
+            no_outfile,
+        } => {
+            let starts_with_args: HashSet<String> = if let Some(starts_with) = starts_with {
+                starts_with
+                    .into_iter()
+                    .map(|s| if *ignore_case { s.to_lowercase() } else { s.clone() })
+                    .collect()
+            } else {
+                HashSet::new()
+            };
+            let ends_with_args: HashSet<String> = if let Some(ends_with) = ends_with {
+                ends_with
+                    .into_iter()
+                    .map(|s| if *ignore_case { s.to_lowercase() } else { s.clone() })
+                    .collect()
+            } else {
+                HashSet::new()
+            };
+            let starts_and_ends_with_args: HashSet<String> =
+                if let Some(starts_and_ends_with) = starts_and_ends_with {
+                    starts_and_ends_with
+                        .into_iter()
+                        .map(|s| if *ignore_case { s.to_lowercase() } else { s.clone() })
+                        .collect()
+                } else {
+                    HashSet::new()
+                };
+
+            if starts_with_args.is_empty()
+                && ends_with_args.is_empty()
+                && starts_with_args.is_empty()
+            {
+                return Err("Error: No keypair search criteria provided (--starts-with or --end-with or --starts-and-ends-with)".into());
+            }
+
+            let num_threads = match num_threads {
+                Some(n) => *n,
+                None => default_num_threads,
+            };
+
+            let grind_matches = grind_parse_args(
+                *ignore_case,
+                starts_with_args,
+                ends_with_args,
+                starts_and_ends_with_args,
+                num_threads,
+            );
+
+            // let derivation_path = acquire_derivation_path(matches)?;
+
+            let word_count: usize = word_count.parse()?;
+            let mnemonic_type = MnemonicType::for_word_count(word_count)?;
+            let language = bip39::Language::English;
+
+            let (passphrase, passphrase_message) = if *use_mnemonic {
+                // acquire_passphrase_and_message(matches)?
+                match prompt_passphrase(
+                    "\nFor added security, enter a BIP39 passphrase\n\
+             \nNOTE! This passphrase improves security of the recovery seed phrase NOT the\n\
+             keypair file itself, which is stored as insecure plain text\n\
+             \nBIP39 Passphrase (empty for none): ",
+                ) {
+                    Ok(passphrase) => {
+                        println!();
+                        (passphrase, " and your BIP39 passphrase".to_string())
+                    }
+                    Err(_e) => ("".to_string(), "".to_string()),
+                }
+            } else {
+                // no_passphrase_and_message()
+                ("".to_string(), "".to_string())
+            };
+            // let no_outfile = matches.is_present(NO_OUTFILE_ARG.name);
+
+            let skip_len_44_pubkeys = grind_matches
+                .iter()
+                .map(|g| {
+                    let target_key = if *ignore_case {
+                        g.starts.to_ascii_uppercase()
+                    } else {
+                        g.starts.clone()
+                    };
+                    let target_key =
+                        target_key + &(0..44 - g.starts.len()).map(|_| "1").collect::<String>();
+                    bs58::decode(target_key).into_vec()
+                })
+                .filter_map(|s| s.ok())
+                .all(|s| s.len() > 32);
+
+            let grind_matches_thread_safe = Arc::new(grind_matches);
+            let attempts = Arc::new(AtomicU64::new(1));
+            let found = Arc::new(AtomicU64::new(0));
+            let start = Instant::now();
+            let done = Arc::new(AtomicBool::new(false));
+
+            let thread_handles: Vec<_> = (0..num_threads).map(|_| {
+                 let done = done.clone();
+                 let attempts = attempts.clone();
+                 let found = found.clone();
+                 let grind_matches_thread_safe = grind_matches_thread_safe.clone();
+                 let passphrase = passphrase.clone();
+                 let passphrase_message = passphrase_message.clone();
+                 let derivation_path = derivation_path.clone();
+
+                 thread::spawn(move || loop {
+                     if done.load(Ordering::Relaxed) {
+                         break;
+                     }
+
+                     let attempts = attempts.fetch_add(1, Ordering::Relaxed);
+                     if attempts % 1_000_000 == 0 {
+                         println!(
+                             "Searched {} keypairs in {}s. {} matches found.",
+                             attempts,
+                             start.elapsed().as_secs(),
+                             found.load(Ordering::Relaxed)
+                         );
+                     }
+                     let (keypair, phrase) = if *use_mnemonic {
+                         let mnemonic = Mnemonic::new(mnemonic_type, language);
+                         let seed = Seed::new(&mnemonic, &passphrase);
+                         let keypair = match derivation_path {
+                             Some(_) => keypair_from_seed_and_derivation_path(
+                                 seed.as_bytes(),
+                                 derivation_path.clone().map(|p| DerivationPath::from_absolute_path_str(p.to_str().unwrap()).unwrap()).clone(),
+                             ),
+                             None => keypair_from_seed(seed.as_bytes()),
+                         }.unwrap();
+                         (keypair, mnemonic.phrase().to_string())
+                     } else {
+                         (Keypair::new(), "".to_string())
+                     };
+
+                     if skip_len_44_pubkeys
+                         && keypair.pubkey() >= smallest_length_44_public_key::PUBKEY
+                     {
+                         continue;
+                     }
+                     let mut pubkey = bs58::encode(keypair.pubkey()).into_string();
+                     if *ignore_case {
+                         pubkey = pubkey.to_lowercase();
+                     }
+                     let mut total_matches_found = 0;
+                     for i in 0..grind_matches_thread_safe.len() {
+                         if grind_matches_thread_safe[i].count.load(Ordering::Relaxed) == 0 {
+                             total_matches_found += 1;
+                             continue;
+                         }
+                         if (!grind_matches_thread_safe[i].starts.is_empty()
+                             && grind_matches_thread_safe[i].ends.is_empty()
+                             && pubkey.starts_with(&grind_matches_thread_safe[i].starts))
+                             || (grind_matches_thread_safe[i].starts.is_empty()
+                                 && !grind_matches_thread_safe[i].ends.is_empty()
+                                 && pubkey.ends_with(&grind_matches_thread_safe[i].ends))
+                             || (grind_matches_thread_safe[i].starts.is_empty()
+                                 && !grind_matches_thread_safe[i].ends.is_empty()
+                                 && pubkey.starts_with(&grind_matches_thread_safe[i].starts)
+                                 && pubkey.ends_with(&grind_matches_thread_safe[i].ends))
+                         {
+                             let _found = found.fetch_add(1, Ordering::Relaxed);
+                             grind_matches_thread_safe[i]
+                                 .count
+                                 .fetch_sub(1, Ordering::Relaxed);
+                             if !no_outfile {
+                                 write_keypair_file(
+                                     &keypair,
+                                     &format!("{}.json", keypair.pubkey()),
+                                 ).unwrap();
+                                 println!(
+                                     "Wrote keypair to {}",
+                                     &format!("{}.json", keypair.pubkey())
+                                 );
+                             }
+                             if *use_mnemonic {
+                                 let divider = String::from_utf8(vec![b'='; phrase.len()]).unwrap();
+                                 println!("{}\nFound matching key {}", &divider, keypair.pubkey());
+                                 println!("\nSave this seed phrase{} to recover your new keypair:\n{}\n{}", passphrase_message, phrase, &divider);
+                             }
+                         }
+                     }
+                     if total_matches_found == grind_matches_thread_safe.len() {
+                         done.store(true, Ordering::Relaxed);
+                     }
+                 })
+             })
+             .collect();
+
+            for thread_handles in thread_handles {
+                thread_handles.join().unwrap();
+            }
+        }
         Command::Pubkey {
             outfile,
             keypair,
@@ -222,186 +431,6 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 // fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
 //     match subcommand {
 //         ("grind", matches) => {
-//             let ignore_case = matches.is_present("ignore_case");
-//
-//             let starts_with_args = if matches.is_present("starts_with") {
-//                 matches
-//                     .values_of_t_or_exit::<String>("starts_with")
-//                     .into_iter()
-//                     .map(|s| if ignore_case { s.to_lowercase() } else { s })
-//                     .collect()
-//             } else {
-//                 HashSet::new()
-//             };
-//             let ends_with_args: HashSet<String> = if matches.is_present("ends_with") {
-//                 matches
-//                     .values_of_t_or_exit::<String>("ends_with")
-//                     .into_iter()
-//                     .map(|s| if ignore_case { s.to_lowercase() } else { s })
-//                     .collect()
-//             } else {
-//                 HashSet::new()
-//             };
-//             let starts_and_ends_with_args: HashSet<String> =
-//                 if matches.is_present("starts_and_ends_with") {
-//                     matches
-//                         .values_of_t_or_exit::<String>("starts_and_ends_with")
-//                         .into_iter()
-//                         .map(|s| if ignore_case { s.to_lowercase() } else { s })
-//                         .collect()
-//                 } else {
-//                     HashSet::new()
-//                 };
-//
-//             if starts_with_args.is_empty()
-//                 && ends_with_args.is_empty()
-//                 && starts_with_args.is_empty()
-//             {
-//                 return Err("Error: No keypair search criteria provided (--starts-with or --end-with or --starts-and-ends-with)".into());
-//             }
-//
-//             let num_threads = *matches.get_one("num_threads").unwrap();
-//
-//             let grind_matches = grind_parse_args(
-//                 ignore_case,
-//                 starts_with_args,
-//                 ends_with_args,
-//                 starts_and_ends_with_args,
-//                 num_threads,
-//             );
-//
-//             let use_mnemonic = matches.is_present("use_mnemonic");
-//
-//             let derivation_path = acquire_derivation_path(matches)?;
-//
-//             let word_count: usize = matches.value_of_t(WORD_COUNT_ARG.name)?;
-//             let mnemonic_type = MnemonicType::for_word_count(word_count)?;
-//             let language = acquire_language(matches);
-//
-//             let (passphrase, passphrase_message) = if use_mnemonic {
-//                 acquire_passphrase_and_message(matches)?
-//             } else {
-//                 no_passphrase_and_message()
-//             };
-//             let no_outfile = matches.is_present(NO_OUTFILE_ARG.name);
-//
-//             let skip_len_44_pubkeys = grind_matches
-//                 .iter()
-//                 .map(|g| {
-//                     let target_key = if ignore_case {
-//                         g.starts.to_ascii_uppercase()
-//                     } else {
-//                         g.starts.clone()
-//                     };
-//                     let target_key =
-//                         target_key + &(0..44 - g.starts.len()).map(|_| "1").collect::<String>();
-//                     bs58::decode(target_key).into_vec()
-//                 })
-//                 .filter_map(|s| s.ok())
-//                 .all(|s| s.len() > 32);
-//
-//             let grind_matches_thread_safe = Arc::new(grind_matches);
-//             let attempts = Arc::new(AtomicU64::new(1));
-//             let found = Arc::new(AtomicU64::new(0));
-//             let start = Instant::now();
-//             let done = Arc::new(AtomicBool::new(false));
-//
-//             let thread_handles: Vec<_> = (0..num_threads).map(|_| {
-//                 let done = done.clone();
-//                 let attempts = attempts.clone();
-//                 let found = found.clone();
-//                 let grind_matches_thread_safe = grind_matches_thread_safe.clone();
-//                 let passphrase = passphrase.clone();
-//                 let passphrase_message = passphrase_message.clone();
-//                 let derivation_path = derivation_path.clone();
-//
-//                 thread::spawn(move || loop {
-//                     if done.load(Ordering::Relaxed) {
-//                         break;
-//                     }
-//
-//                     let attempts = attempts.fetch_add(1, Ordering::Relaxed);
-//                     if attempts % 1_000_000 == 0 {
-//                         println!(
-//                             "Searched {} keypairs in {}s. {} matches found.",
-//                             attempts,
-//                             start.elapsed().as_secs(),
-//                             found.load(Ordering::Relaxed)
-//                         );
-//                     }
-//                     let (keypair, phrase) = if use_mnemonic {
-//                         let mnemonic = Mnemonic::new(mnemonic_type, language);
-//                         let seed = Seed::new(&mnemonic, &passphrase);
-//                         let keypair = match derivation_path {
-//                             Some(_) => keypair_from_seed_and_derivation_path(
-//                                 seed.as_bytes(),
-//                                 derivation_path.clone(),
-//                             ),
-//                             None => keypair_from_seed(seed.as_bytes()),
-//                         }.unwrap();
-//                         (keypair, mnemonic.phrase().to_string())
-//                     } else {
-//                         (Keypair::new(), "".to_string())
-//                     };
-//
-//                     if skip_len_44_pubkeys
-//                         && keypair.pubkey() >= smallest_length_44_public_key::PUBKEY
-//                     {
-//                         continue;
-//                     }
-//                     let mut pubkey = bs58::encode(keypair.pubkey()).into_string();
-//                     if ignore_case {
-//                         pubkey = pubkey.to_lowercase();
-//                     }
-//                     let mut total_matches_found = 0;
-//                     for i in 0..grind_matches_thread_safe.len() {
-//                         if grind_matches_thread_safe[i].count.load(Ordering::Relaxed) == 0 {
-//                             total_matches_found += 1;
-//                             continue;
-//                         }
-//                         if (!grind_matches_thread_safe[i].starts.is_empty()
-//                             && grind_matches_thread_safe[i].ends.is_empty()
-//                             && pubkey.starts_with(&grind_matches_thread_safe[i].starts))
-//                             || (grind_matches_thread_safe[i].starts.is_empty()
-//                                 && !grind_matches_thread_safe[i].ends.is_empty()
-//                                 && pubkey.ends_with(&grind_matches_thread_safe[i].ends))
-//                             || (grind_matches_thread_safe[i].starts.is_empty()
-//                                 && !grind_matches_thread_safe[i].ends.is_empty()
-//                                 && pubkey.starts_with(&grind_matches_thread_safe[i].starts)
-//                                 && pubkey.ends_with(&grind_matches_thread_safe[i].ends))
-//                         {
-//                             let _found = found.fetch_add(1, Ordering::Relaxed);
-//                             grind_matches_thread_safe[i]
-//                                 .count
-//                                 .fetch_sub(1, Ordering::Relaxed);
-//                             if !no_outfile {
-//                                 write_keypair_file(
-//                                     &keypair,
-//                                     &format!("{}.json", keypair.pubkey()),
-//                                 ).unwrap();
-//                                 println!(
-//                                     "Wrote keypair to {}",
-//                                     &format!("{}.json", keypair.pubkey())
-//                                 );
-//                             }
-//                             if use_mnemonic {
-//                                 let divider = String::from_utf8(vec![b'='; phrase.len()]).unwrap();
-//                                 println!("{}\nFound matching key {}", &divider, keypair.pubkey());
-//                                 println!("\nSave this seed phrase{} to recover your new keypair:\n{}\n{}", passphrase_message, phrase, &divider);
-//                             }
-//                         }
-//                     }
-//                     if total_matches_found == grind_matches_thread_safe.len() {
-//                         done.store(true, Ordering::Relaxed);
-//                     }
-//                 })
-//             })
-//             .collect();
-//
-//             for thread_handles in thread_handles {
-//                 thread_handles.join().unwrap();
-//             }
-//         }
 //     }
 //
 //     Ok(())
@@ -467,64 +496,6 @@ fn output_keypair(
         println!("Wrote {source} keypair to {outfile}");
     }
 
-    Ok(())
-}
-
-fn grind_validator_starts_with(v: &str) -> Result<(), String> {
-    if v.matches(':').count() != 1 || (v.starts_with(':') || v.ends_with(':')) {
-        return Err(String::from("Expected : between PREFIX and COUNT"));
-    }
-
-    let args: Vec<&str> = v.split(':').collect();
-    bs58::decode(&args[0])
-        .into_vec()
-        .map_err(|err| format!("{}: {:?}", args[0], err))?;
-
-    let count = args[1].parse::<u64>();
-    if count.is_err() || count.unwrap() == 0 {
-        return Err(String::from("Expected COUNT to be of type u64"));
-    }
-
-    Ok(())
-}
-
-fn grind_validator_ends_with(v: &str) -> Result<(), String> {
-    if v.matches(':').count() != 1 || (v.starts_with(':') || v.ends_with(':')) {
-        return Err(String::from("Expected : between SUFFIX and COUNT"));
-    }
-
-    let args: Vec<&str> = v.split(':').collect();
-    bs58::decode(&args[0])
-        .into_vec()
-        .map_err(|err| format!("{}: {:?}", args[0], err))?;
-
-    let count = args[1].parse::<u64>();
-    if count.is_err() || count.unwrap() == 0 {
-        return Err(String::from("Expected COUNT to be of type u64"));
-    }
-
-    Ok(())
-}
-
-fn grind_validator_starts_and_end_with(v: &str) -> Result<(), String> {
-    if v.matches(':').count() != 2 || (v.starts_with(':') || v.ends_with(':')) {
-        return Err(String::from(
-            "Expected : between PREFIX and SUFFIX and COUNT",
-        ));
-    }
-
-    let args: Vec<&str> = v.split(':').collect();
-    bs58::decode(&args[0])
-        .into_vec()
-        .map_err(|err| format!("{}: {:?}", args[0], err))?;
-    bs58::decode(&args[1])
-        .into_vec()
-        .map_err(|err| format!("{}: {:?}", args[1], err))?;
-
-    let count = args[2].parse::<u64>();
-    if count.is_err() || count.unwrap() == 0 {
-        return Err(String::from("Expected COUNT to be of type u64"));
-    }
     Ok(())
 }
 
