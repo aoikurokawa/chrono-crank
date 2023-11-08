@@ -147,17 +147,26 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             no_outfile,
         } => {
             let starts_with_args: HashSet<String> = if let Some(starts_with) = starts_with {
-                starts_with
-                    .into_iter()
-                    .map(|s| if ignore_case { s.to_lowercase() } else { s.clone() })
-                    .collect()
+                let mut args = HashSet::new();
+                if ignore_case {
+                    args.insert(starts_with.to_lowercase());
+                } else {
+                    args.insert(starts_with.clone());
+                }
+                args
             } else {
                 HashSet::new()
             };
             let ends_with_args: HashSet<String> = if let Some(ends_with) = ends_with {
                 ends_with
                     .into_iter()
-                    .map(|s| if ignore_case { s.to_lowercase() } else { s.clone() })
+                    .map(|s| {
+                        if ignore_case {
+                            s.to_lowercase()
+                        } else {
+                            s.clone()
+                        }
+                    })
                     .collect()
             } else {
                 HashSet::new()
@@ -166,7 +175,13 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 if let Some(starts_and_ends_with) = starts_and_ends_with {
                     starts_and_ends_with
                         .into_iter()
-                        .map(|s| if ignore_case { s.to_lowercase() } else { s.clone() })
+                        .map(|s| {
+                            if ignore_case {
+                                s.to_lowercase()
+                            } else {
+                                s.clone()
+                            }
+                        })
                         .collect()
                 } else {
                     HashSet::new()
@@ -563,4 +578,3 @@ fn grind_parse_args(
 
     grind_matches
 }
-

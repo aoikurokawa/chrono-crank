@@ -89,7 +89,7 @@ pub enum Command {
             value_parser = grind_validator_starts_with,
             help = "Saves specified number of keypairs whos public key starts with the indicated prefix\nExample: --starts-with sol:4\nPREFIX type is Base58\nCOUNT type is u64"
         )]
-        starts_with: Option<Vec<String>>,
+        starts_with: Option<String>,
 
         #[arg(
             long,
