@@ -409,14 +409,12 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 path
             };
 
-            if outfile.to_str().unwrap() != STDOUT_OUTFILE_TOKEN {
-                if !force && outfile.exists() {
-                    let err_msg = format!(
-                        "Refusing to overwrite {} without --force flag",
-                        outfile.to_str().unwrap()
-                    );
-                    return Err(err_msg.into());
-                }
+            if outfile.to_str().unwrap() != STDOUT_OUTFILE_TOKEN && !force && outfile.exists() {
+                let err_msg = format!(
+                    "Refusing to overwrite {} without --force flag",
+                    outfile.to_str().unwrap()
+                );
+                return Err(err_msg.into());
             }
 
             let keypair_name = "recover";
