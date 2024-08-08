@@ -1,28 +1,20 @@
-# Keygen
+# JSM CLI
 
-## Overview
+## Vault
 
-USAGE: 
+### Deploy the program
 
-  keygen [OPTIONS] <SUBCOMMAND>
+```bash
+solana program deploy target/sbf-solana-solana/release/jito_vault_program.so --program-id ~/.config/solana/vault.json
+```
 
-OPTIONS:
+### CLI
 
-  -C, --config <FILEPATH> Configuration file to use [default]: ~/.config/solana/cli/config.yml
+1. init-config
 
-SUBCOMMANDS:
+```bash
+cargo r -- init-config -k ~/.config/solana/id.json
+```
 
-  grind    Grind for vanity keypairs
+Compute units consumed: 18.256
 
-  help     Print this mesage or the help of the given subcommand(s)
-
-  new      Generate new keypair file from a random seed phrase and optional BIP39 passphrase
-
-  pubkey   Display the pubkey from a keypair file
-
-  recover  Recover keypair from seed phrase and optional BIP39 passphrase
-
-  verify   Verify a keypair can sign and verify a message
-
-## Libraries
-- [clap](https://docs.rs/clap/4.4.7/clap/_derive/_tutorial/chapter_0/index.html)
