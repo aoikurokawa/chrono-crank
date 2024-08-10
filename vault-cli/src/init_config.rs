@@ -5,6 +5,7 @@ use solana_client::rpc_client::RpcClient;
 use solana_sdk::{
     message::legacy, signature::read_keypair_file, signer::Signer, transaction::Transaction,
 };
+use sokoban::ZeroCopy;
 
 use crate::{jito_restaking_program_id, jito_vault_program_id};
 
@@ -43,4 +44,9 @@ pub fn command_init_config(args: InitConfig, client: RpcClient) {
         .expect("Fail to send transaction");
 
     println!("Sig: {sig}");
+
+    let res = client.get_account_data(&config_pubkey).expect("Fail to fetch config account");
+    let config = jito_vault_core::config::Config::load_bytes(&res).expect("Fail to convert Config");
+
+    println!("config bump: {}", config.bump());
 }

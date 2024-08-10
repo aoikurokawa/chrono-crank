@@ -11,6 +11,7 @@ jito-vault-core = { workspace = true }
 jito-restaking-core = { workspace = true }
 jito-restaking-sdk = { workspace = true }
 jito-vault-sdk = { workspace = true }
+lib-sokoban = { workspace = true }
 solana-client = { workspace = true }
 solana-sdk = { workspace = true }
 thiserror = { workspace = true }
