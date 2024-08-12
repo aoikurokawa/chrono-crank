@@ -38,3 +38,6 @@ Compute units consumed: 60,733
 ```bash
 spl-token create-token
 ```
+
+## Resources
+- https://github.com/jito-foundation/restaking
