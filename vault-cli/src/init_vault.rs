@@ -1,7 +1,7 @@
 use std::{path::PathBuf, str::FromStr};
 
 use clap::Parser;
-use jito_vault_core::{vault::Vault, vault_delegation_list::VaultDelegationList};
+use jito_vault_core::vault::Vault;
 use solana_client::rpc_client::RpcClient;
 use solana_sdk::{
     message::legacy, pubkey::Pubkey, signature::read_keypair_file, signer::Signer,
@@ -46,14 +46,13 @@ pub fn command_init_vault(args: InitVault, client: RpcClient) {
         Pubkey::from_str(&args.token_mint_pubkey).expect("Fail to read token_mint_pubkey");
 
     let vault_pubkey = Vault::find_program_address(&jito_vault_program_id, &vault_base.pubkey()).0;
-    let vault_delegation_list =
-        VaultDelegationList::find_program_address(&jito_vault_program_id, &vault_pubkey).0;
+    // let vault_delegation_list =
+    //     VaultDelegationList::find_program_address(&jito_vault_program_id, &vault_pubkey).0;
 
-    let instruction = jito_vault_sdk::initialize_vault(
+    let instruction = jito_vault_sdk::sdk::initialize_vault(
         &jito_vault_program_id,
         &config_pubkey,
         &vault_pubkey,
-        &vault_delegation_list,
         &lrt_mint.pubkey(),
         &token_mint_pubkey,
         &vault_admin.pubkey(),

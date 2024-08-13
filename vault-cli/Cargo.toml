@@ -5,12 +5,15 @@ edition = "2021"
 
 [dependencies]
 clap = { workspace = true }
-jito-restaking-sanitization = { workspace = true }
 jito-jsm-core = { workspace = true }
 jito-vault-core = { workspace = true }
 jito-restaking-core = { workspace = true }
 jito-restaking-sdk = { workspace = true }
 jito-vault-sdk = { workspace = true }
+jito-vault-program = { workspace = true }
+jito-restaking-program = { workspace = true }
+jito-account-traits-derive = { workspace = true }
+jito-account-traits = { workspace = true }
 lib-sokoban = { workspace = true }
 solana-client = { workspace = true }
 solana-sdk = { workspace = true }

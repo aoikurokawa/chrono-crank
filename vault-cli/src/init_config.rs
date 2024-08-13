@@ -5,7 +5,6 @@ use solana_client::rpc_client::RpcClient;
 use solana_sdk::{
     message::legacy, signature::read_keypair_file, signer::Signer, transaction::Transaction,
 };
-use sokoban::ZeroCopy;
 
 use crate::{jito_restaking_program_id, jito_vault_program_id};
 
@@ -25,7 +24,7 @@ pub fn command_init_config(args: InitConfig, client: RpcClient) {
     let config_pubkey =
         jito_vault_core::config::Config::find_program_address(&jito_vault_program_id).0;
 
-    let instruction = jito_vault_sdk::initialize_config(
+    let instruction = jito_vault_sdk::sdk::initialize_config(
         &jito_vault_program_id,
         &config_pubkey,
         &admin.pubkey(),
@@ -45,8 +44,8 @@ pub fn command_init_config(args: InitConfig, client: RpcClient) {
 
     println!("Sig: {sig}");
 
-    let res = client.get_account_data(&config_pubkey).expect("Fail to fetch config account");
-    let config = jito_vault_core::config::Config::load_bytes(&res).expect("Fail to convert Config");
+    // let res = client.get_account_data(&config_pubkey).expect("Fail to fetch config account");
+    // let config = jito_vault_core::config::Config::load_bytes(&res).expect("Fail to convert Config");
 
-    println!("config bump: {}", config.bump());
+    // println!("config bump: {}", config.bump());
 }

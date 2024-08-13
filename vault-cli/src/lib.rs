@@ -2,6 +2,7 @@ use std::str::FromStr;
 
 use solana_sdk::pubkey::Pubkey;
 
+pub mod create_token_metadata;
 pub mod init_config;
 pub mod init_vault;
 
