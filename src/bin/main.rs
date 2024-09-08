@@ -1,11 +1,13 @@
 use std::{path::PathBuf, time::Duration};
 
-use chrono_crank::handler::VaultUpdateStateTrackerHandler;
+use chrono_crank::{
+    vault_handler::VaultHandler, vault_update_state_tracker_handler::VaultUpdateStateTrackerHandler,
+};
 use clap::Parser;
 use jito_bytemuck::AccountDeserialize;
-use jito_vault_core::{config::Config, vault::Vault};
+use jito_vault_core::config::Config;
 use solana_client::nonblocking::rpc_client::RpcClient;
-use solana_sdk::{pubkey::Pubkey, signature::read_keypair_file};
+use solana_sdk::{pubkey, pubkey::Pubkey, signature::read_keypair_file};
 
 #[derive(Parser)]
 struct Args {
@@ -49,17 +51,25 @@ async fn main() {
     //     .iter()
     //     .map(|base| Vault::find_program_address(&args.vault_program_id, base).0)
     //     .collect();
-
-    let handler = VaultUpdateStateTrackerHandler::new(
+    let handler = VaultHandler::new(
         &args.rpc_url,
         payer,
         args.vault_program_id,
         config_address,
         config.epoch_length(),
     );
+    handler.initialize(pubkey!("H1eVpmCu7bSsXgeYNm23P3CoYwtvskKiQWArjFh9mL9B")).await;
 
-    let vault = handler.get_vault(args.vaults[0]).await;
-    println!("Vault {:?}", vault);
+    // let handler = VaultUpdateStateTrackerHandler::new(
+    //     &args.rpc_url,
+    //     payer,
+    //     args.vault_program_id,
+    //     config_address,
+    //     config.epoch_length(),
+    // );
+
+    // let vault = handler.get_vault(args.vaults[0]).await;
+    // println!("Vault {:?}", vault);
 
     // let mut last_epoch = 0;
     // loop {

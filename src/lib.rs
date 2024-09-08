@@ -1,6 +1,6 @@
-pub mod handler;
 pub mod init_config;
-pub mod init_vault;
+pub mod vault_handler;
+pub mod vault_update_state_tracker_handler;
 
 // pub const JITO_VAULT_PROGRAM_ID: &str = "AE7fSUJSGxMzjNxSPpNTemrz9cr26RFue4GwoJ1cuR6f";
 // pub const JITO_RESTAKING_PROGRAM_ID: &str = "E5YF9Um1mwQWHffqaUEUwtwnhQKsbMEt33qtvjto3NDZ";
