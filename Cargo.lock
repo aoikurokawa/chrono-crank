@@ -746,7 +746,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4114279215a005bc675e386011e594e1d9b800918cea18fcadadcce864a2046b"
 dependencies = [
  "borsh-derive 0.10.3",
- "hashbrown 0.12.3",
+ "hashbrown 0.13.2",
 ]
 
 [[package]]
@@ -991,6 +991,8 @@ dependencies = [
  "clap 4.4.7",
  "jito-account-traits-derive",
  "jito-bytemuck",
+ "jito-restaking-client",
+ "jito-restaking-core",
  "jito-vault-client",
  "jito-vault-core",
  "jito-vault-sdk",
@@ -1804,9 +1806,6 @@ name = "hashbrown"
 version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8a9ee70c43aaf417c914396645a0fa852624801b24ebb7ae78fe8272889ac888"
-dependencies = [
- "ahash 0.7.7",
-]
 
 [[package]]
 name = "hashbrown"
@@ -2126,6 +2125,51 @@ dependencies = [
  "solana-program",
  "spl-associated-token-account",
  "spl-token",
+ "thiserror",
+]
+
+[[package]]
+name = "jito-restaking-client"
+version = "0.0.2"
+source = "git+https://github.com/jito-foundation/restaking.git?branch=master#ddcb69ff9400bdbd716bbab64508c87dc5512494"
+dependencies = [
+ "anchor-lang",
+ "borsh 0.10.3",
+ "bytemuck",
+ "num-derive 0.4.2",
+ "num-traits",
+ "serde",
+ "serde_with 3.9.0",
+ "solana-program",
+ "solana-sdk",
+ "thiserror",
+]
+
+[[package]]
+name = "jito-restaking-core"
+version = "0.0.2"
+source = "git+https://github.com/jito-foundation/restaking.git?branch=master#ddcb69ff9400bdbd716bbab64508c87dc5512494"
+dependencies = [
+ "borsh 0.10.3",
+ "bytemuck",
+ "jito-bytemuck",
+ "jito-jsm-core",
+ "jito-restaking-sdk",
+ "shank",
+ "solana-program",
+ "spl-associated-token-account",
+ "spl-token",
+ "thiserror",
+]
+
+[[package]]
+name = "jito-restaking-sdk"
+version = "0.0.2"
+source = "git+https://github.com/jito-foundation/restaking.git?branch=master#ddcb69ff9400bdbd716bbab64508c87dc5512494"
+dependencies = [
+ "borsh 0.10.3",
+ "shank",
+ "solana-program",
  "thiserror",
 ]
 

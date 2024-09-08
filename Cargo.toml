@@ -11,6 +11,8 @@ path = "src/bin/main.rs"
 [dependencies]
 clap = { version = "4.4.7", features = ["derive", "env"] }
 jito-bytemuck = { git = "https://github.com/jito-foundation/restaking.git", branch = "master", version = "=0.0.2" }
+jito-restaking-client = { git = "https://github.com/jito-foundation/restaking.git", branch = "master", version = "=0.0.2" }
+jito-restaking-core = { git = "https://github.com/jito-foundation/restaking.git", branch = "master", version = "=0.0.2" }
 jito-vault-client = { git = "https://github.com/jito-foundation/restaking.git", branch = "master", version = "=0.0.2" }
 jito-vault-core = { git = "https://github.com/jito-foundation/restaking.git", branch = "master", version = "=0.0.2" }
 jito-vault-sdk = { git = "https://github.com/jito-foundation/restaking.git", branch = "master", version = "=0.0.2" }

@@ -73,6 +73,8 @@ impl VaultUpdateStateTrackerHandler {
             )
             .0;
 
+            println!("Vault Update State Tracker: {:?}", tracker);
+
             let mut ix_builder = InitializeVaultUpdateStateTrackerBuilder::new();
             ix_builder
                 .config(self.config_address)
@@ -81,13 +83,15 @@ impl VaultUpdateStateTrackerHandler {
                 .payer(self.payer.pubkey())
                 .system_program(system_program::id())
                 .withdrawal_allocation_method(WithdrawalAllocationMethod::Greedy);
+            let mut ix = ix_builder.instruction();
+            ix.program_id = self.vault_program_id;
 
             let blockhash = rpc_client
                 .get_latest_blockhash()
                 .await
                 .expect("get latest blockhash");
             let tx = Transaction::new_signed_with_payer(
-                &[ix_builder.instruction()],
+                &[ix],
                 Some(&self.payer.pubkey()),
                 &[&self.payer],
                 blockhash,
@@ -126,13 +130,15 @@ impl VaultUpdateStateTrackerHandler {
                     .operator(*operator)
                     .vault_operator_delegation(*vault_operator_delegation)
                     .vault_update_state_tracker(tracker);
+                let mut ix = ix_builder.instruction();
+                ix.program_id = self.vault_program_id;
 
                 let blockhash = rpc_client
                     .get_latest_blockhash()
                     .await
                     .expect("get latest blockhash");
                 let tx = Transaction::new_signed_with_payer(
-                    &[ix_builder.instruction()],
+                    &[ix],
                     Some(&self.payer.pubkey()),
                     &[&self.payer],
                     blockhash,
