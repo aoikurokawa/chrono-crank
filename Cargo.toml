@@ -1,21 +1,22 @@
-[workspace]
-members = [
-	"vault-cli"
-]
-resolver = "2"
+[package]
+name = "chrono-crank"
+version = "0.1.0"
+edition = "2021"
+description = "Script to keep the vault"
 
-[workspace.dependencies]
+[[bin]]
+name = "chrono-crank"
+path = "src/bin/main.rs"
+
+[dependencies]
 clap = { version = "4.4.7", features = ["derive", "env"] }
-jito-jsm-core = { git = "https://github.com/aoikurokawa/restaking.git",branch = "aoikurokawa/token_metadata", version = "=0.0.1" }
-jito-vault-core = { git = "https://github.com/aoikurokawa/restaking.git",branch = "aoikurokawa/token_metadata", version = "=0.0.1" }
-jito-restaking-core = { git = "https://github.com/aoikurokawa/restaking.git",branch = "aoikurokawa/token_metadata", version = "=0.0.1" }
-jito-restaking-sdk = { git = "https://github.com/aoikurokawa/restaking.git",branch = "aoikurokawa/token_metadata", version = "=0.0.1" }
-jito-vault-sdk = { git = "https://github.com/aoikurokawa/restaking.git",branch = "aoikurokawa/token_metadata", version = "=0.0.1" }
-jito-vault-program = { git = "https://github.com/aoikurokawa/restaking.git",branch = "aoikurokawa/token_metadata", version = "=0.0.1" }
-jito-restaking-program = { git = "https://github.com/aoikurokawa/restaking.git",branch = "aoikurokawa/token_metadata", version = "=0.0.1" }
-jito-account-traits-derive = { git = "https://github.com/aoikurokawa/restaking.git",branch = "aoikurokawa/token_metadata", version = "=0.0.1" }
-jito-account-traits = { git = "https://github.com/aoikurokawa/restaking.git",branch = "aoikurokawa/token_metadata", version = "=0.0.1" }
+jito-bytemuck = { git = "https://github.com/jito-foundation/restaking.git", branch = "master", version = "=0.0.2" }
+jito-vault-client = { git = "https://github.com/jito-foundation/restaking.git", branch = "master", version = "=0.0.2" }
+jito-vault-core = { git = "https://github.com/jito-foundation/restaking.git", branch = "master", version = "=0.0.2" }
+jito-vault-sdk = { git = "https://github.com/jito-foundation/restaking.git", branch = "master", version = "=0.0.2" }
+jito-account-traits-derive = { git = "https://github.com/jito-foundation/restaking.git", branch = "master", version = "=0.0.2" }
 lib-sokoban = "0.3.2"
 solana-client = "~1.18.0"
 solana-sdk = "~1.18.0"
 thiserror = "1.0.50"
+tokio = { version = "1.40.0", features = ["full"] }

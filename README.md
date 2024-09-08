@@ -1,16 +1,19 @@
-# JSM CLI
+# Chrono Crank
 
-## Vault
+## JITO Vault Program
+https://docs.restaking.jito.network/
 
-### Deploy the program
+### Devnet 
 
-```bash
-solana program deploy target/sbf-solana-solana/release/jito_vault_program.so --program-id ~/.config/solana/vault.json
-```
+34X2uqBhEGiWHu43RDEMwrMqXF4CpCPEZNaKdAaUS9jx
 
-### CLI
+### Testnet
 
-1. init-config
+34X2uqBhEGiWHu43RDEMwrMqXF4CpCPEZNaKdAaUS9jx
+
+## CLI
+
+1. Start cranker
 
 ```bash
 cargo r -- init-config -k ~/.config/solana/id.json
