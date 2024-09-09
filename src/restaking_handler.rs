@@ -110,10 +110,12 @@ impl<'a> RestakingHandler<'a> {
             .admin(self.payer.pubkey())
             .base(base.pubkey())
             .instruction();
+        let mut ix = ix_builder.instruction();
+        ix.program_id = self.restaking_program_id;
 
         let blockhash = rpc_client.get_latest_blockhash().await.expect("");
         let tx = Transaction::new_signed_with_payer(
-            &[ix_builder.instruction()],
+            &[ix],
             Some(&self.payer.pubkey()),
             &[self.payer, &base],
             blockhash,

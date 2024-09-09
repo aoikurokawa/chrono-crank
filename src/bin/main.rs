@@ -1,10 +1,7 @@
 use std::{path::PathBuf, time::Duration};
 
-use chrono_crank::{
-    restaking_handler::RestakingHandler, vault_handler::VaultHandler,
-    vault_update_state_tracker_handler::VaultUpdateStateTrackerHandler,
-};
-use clap::{Parser, Subcommand};
+use chrono_crank::{restaking_handler::RestakingHandler, vault_handler::VaultHandler};
+use clap::Parser;
 use jito_bytemuck::AccountDeserialize;
 use jito_vault_core::config::Config;
 use solana_client::nonblocking::rpc_client::RpcClient;
@@ -51,47 +48,69 @@ async fn main() {
     let rpc_client = RpcClient::new_with_timeout(args.rpc_url.clone(), Duration::from_secs(60));
     let payer = read_keypair_file(args.keypair).expect("read keypair file");
 
-    let config_address =
-        jito_restaking_core::config::Config::find_program_address(&args.restaking_program_id).0;
-    match rpc_client.get_account(&config_address).await {
-        Ok(account) => {
-            let _config = Config::try_from_slice_unchecked(&account.data).expect("");
-        }
-        Err(_e) => {
-            let handler = RestakingHandler::new(
-                &args.rpc_url,
-                &payer,
-                args.restaking_program_id,
-                pubkey!("7nVGRMDvUNLMeX6RLCo4qNSUEhSwW7k8wVQ7a8u1GFAp"),
-            );
-            handler.initialize_config().await;
+    // let handler = RestakingHandler::new(
+    //     &args.rpc_url,
+    //     &payer,
+    //     args.restaking_program_id,
+    //     pubkey!("7nVGRMDvUNLMeX6RLCo4qNSUEhSwW7k8wVQ7a8u1GFAp"),
+    // );
+    // handler.initialize_config().await;
 
-            handler.initialize_ncn().await;
+    // handler.initialize_ncn().await;
 
-            handler.initialize_operator().await;
-        }
-    }
+    // handler.initialize_operator().await;
 
-    let config_address =
-        jito_vault_core::config::Config::find_program_address(&args.vault_program_id).0;
-    match rpc_client.get_account(&config_address).await {
-        Ok(account) => {
-            let _config = Config::try_from_slice_unchecked(&account.data).expect("");
-        }
-        Err(_e) => {
-            let handler = VaultHandler::new(
-                &args.rpc_url,
-                &payer,
-                args.vault_program_id,
-                pubkey!("7nVGRMDvUNLMeX6RLCo4qNSUEhSwW7k8wVQ7a8u1GFAp"),
-            );
-            handler.initialize_config().await;
+    // let config_address =
+    //     jito_restaking_core::config::Config::find_program_address(&args.restaking_program_id).0;
+    // match rpc_client.get_account(&config_address).await {
+    //     Ok(account) => {
+    //         let _config = Config::try_from_slice_unchecked(&account.data).expect("");
+    //     }
+    //     Err(_e) => {
+    //         let handler = RestakingHandler::new(
+    //             &args.rpc_url,
+    //             &payer,
+    //             args.restaking_program_id,
+    //             pubkey!("7nVGRMDvUNLMeX6RLCo4qNSUEhSwW7k8wVQ7a8u1GFAp"),
+    //         );
+    //         handler.initialize_config().await;
 
-            handler
-                .initialize(pubkey!("DgWYH2dz3byhMcCDWY1qDg3NCfWzHA84sxZUpVxSWjTh"))
-                .await;
-        }
-    }
+    //         // handler.initialize_ncn().await;
+
+    //         // handler.initialize_operator().await;
+    //     }
+    // }
+
+    // let config_address =
+    //     jito_vault_core::config::Config::find_program_address(&args.vault_program_id).0;
+    // match rpc_client.get_account(&config_address).await {
+    //     Ok(account) => {
+    //         let _config = Config::try_from_slice_unchecked(&account.data).expect("");
+    //         let handler = VaultHandler::new(
+    //             &args.rpc_url,
+    //             &payer,
+    //             args.vault_program_id,
+    //             pubkey!("7nVGRMDvUNLMeX6RLCo4qNSUEhSwW7k8wVQ7a8u1GFAp"),
+    //         );
+
+    //         handler
+    //             .initialize(pubkey!("k4T4gcpEzi4NgCstytnbTUeD4t4m5J91nQE8t8qtxt3"))
+    //             .await;
+    //     }
+    //     Err(_e) => {
+    let handler = VaultHandler::new(
+        &args.rpc_url,
+        &payer,
+        args.vault_program_id,
+        pubkey!("7nVGRMDvUNLMeX6RLCo4qNSUEhSwW7k8wVQ7a8u1GFAp"),
+    );
+    // handler.initialize_config().await;
+
+    handler
+        .initialize(pubkey!("6YRjbFsD2AoF7TtbHH5bhkMtD6biRv82P5Ympk8LzW9m"))
+        .await;
+    //     }
+    // }
 
     // let vault_addresses: Vec<Pubkey> = args
     //     .vault_bases

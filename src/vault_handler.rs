@@ -40,7 +40,7 @@ impl<'a> VaultHandler<'a> {
         let ix_builder = ix_builder
             .config(config_address)
             .admin(self.payer.pubkey())
-            .restaking_program(pubkey!("7nVGRMDvUNLMeX6RLCo4qNSUEhSwW7k8wVQ7a8u1GFAp"));
+            .restaking_program(pubkey!("5b2dHDz9DLhXnwQDG612bgtBGJD62Riw9s9eYuDT3Zma"));
         let mut ix = ix_builder.instruction();
         ix.program_id = self.vault_program_id;
 
