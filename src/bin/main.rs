@@ -88,27 +88,30 @@ async fn main() {
         })
         .collect();
 
-    let mut last_epoch = 0;
-    loop {
-        let slot = rpc_client.get_slot().await.expect("get slot");
-        let epoch = slot / config.epoch_length();
+    println!("Vaults: {:?}", vaults);
+    println!("Operators: {:?}", operators);
 
-        if epoch != last_epoch {
-            // Crank
-            handler.crank(&vaults, &operators).await;
+    // let mut last_epoch = 0;
+    // loop {
+    //     let slot = rpc_client.get_slot().await.expect("get slot");
+    //     let epoch = slot / config.epoch_length();
 
-            // Close previous epoch's tracker
-            handler.close(&vaults, last_epoch).await;
+    //     if epoch != last_epoch {
+    //         // Crank
+    //         handler.crank(&vaults, &operators).await;
 
-            // Initialize new tracker
-            handler.initialize(&vaults, epoch).await;
+    //         // Close previous epoch's tracker
+    //         handler.close(&vaults, last_epoch).await;
 
-            last_epoch = epoch;
-        }
+    //         // Initialize new tracker
+    //         handler.initialize(&vaults, epoch).await;
 
-        // ---------- SLEEP (6 hours)----------
-        tokio::time::sleep(Duration::from_secs(6 * 60 * 60)).await;
-    }
+    //         last_epoch = epoch;
+    //     }
+
+    //     // ---------- SLEEP (6 hours)----------
+    //     tokio::time::sleep(Duration::from_secs(6 * 60 * 60)).await;
+    // }
 }
 
 pub async fn list_ncn_vault_tickets(
