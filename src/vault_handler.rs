@@ -85,7 +85,7 @@ impl<'a> VaultHandler<'a> {
         let tx = Transaction::new_signed_with_payer(
             &[ix],
             Some(&self.payer.pubkey()),
-            &[&self.payer, &base, &vrt_mint],
+            &[self.payer, &base, &vrt_mint],
             blockhash,
         );
 

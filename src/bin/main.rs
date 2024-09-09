@@ -1,11 +1,16 @@
 use std::{path::PathBuf, time::Duration};
 
-use chrono_crank::{restaking_handler::RestakingHandler, vault_handler::VaultHandler};
+use chrono_crank::vault_update_state_tracker_handler::VaultUpdateStateTrackerHandler;
 use clap::Parser;
-use jito_bytemuck::AccountDeserialize;
-use jito_vault_core::config::Config;
-use solana_client::nonblocking::rpc_client::RpcClient;
-use solana_sdk::{pubkey, pubkey::Pubkey, signature::read_keypair_file};
+use jito_bytemuck::{AccountDeserialize, Discriminator};
+use jito_restaking_core::{ncn_operator_state::NcnOperatorState, ncn_vault_ticket::NcnVaultTicket};
+use solana_account_decoder::UiAccountEncoding;
+use solana_client::{
+    nonblocking::rpc_client::RpcClient,
+    rpc_config::{RpcAccountInfoConfig, RpcProgramAccountsConfig},
+    rpc_filter::{Memcmp, MemcmpEncodedBytes, RpcFilterType},
+};
+use solana_sdk::{pubkey::Pubkey, signature::read_keypair_file};
 
 #[derive(Parser)]
 struct Args {
@@ -33,13 +38,9 @@ struct Args {
     )]
     restaking_program_id: Pubkey,
 
-    /// Vault base
+    /// NCN
     #[arg(long)]
-    vaults: Vec<Pubkey>,
-
-    /// Operators
-    #[arg(long)]
-    operators: Vec<Pubkey>,
+    ncn: Pubkey,
 }
 
 #[tokio::main]
@@ -48,103 +49,132 @@ async fn main() {
     let rpc_client = RpcClient::new_with_timeout(args.rpc_url.clone(), Duration::from_secs(60));
     let payer = read_keypair_file(args.keypair).expect("read keypair file");
 
-    // let handler = RestakingHandler::new(
-    //     &args.rpc_url,
-    //     &payer,
-    //     args.restaking_program_id,
-    //     pubkey!("7nVGRMDvUNLMeX6RLCo4qNSUEhSwW7k8wVQ7a8u1GFAp"),
-    // );
-    // handler.initialize_config().await;
+    let config_address =
+        jito_vault_core::config::Config::find_program_address(&args.vault_program_id).0;
 
-    // handler.initialize_ncn().await;
+    let account = rpc_client.get_account(&config_address).await.expect("");
+    let config =
+        jito_vault_core::config::Config::try_from_slice_unchecked(&account.data).expect("");
 
-    // handler.initialize_operator().await;
-
-    // let config_address =
-    //     jito_restaking_core::config::Config::find_program_address(&args.restaking_program_id).0;
-    // match rpc_client.get_account(&config_address).await {
-    //     Ok(account) => {
-    //         let _config = Config::try_from_slice_unchecked(&account.data).expect("");
-    //     }
-    //     Err(_e) => {
-    //         let handler = RestakingHandler::new(
-    //             &args.rpc_url,
-    //             &payer,
-    //             args.restaking_program_id,
-    //             pubkey!("7nVGRMDvUNLMeX6RLCo4qNSUEhSwW7k8wVQ7a8u1GFAp"),
-    //         );
-    //         handler.initialize_config().await;
-
-    //         // handler.initialize_ncn().await;
-
-    //         // handler.initialize_operator().await;
-    //     }
-    // }
-
-    // let config_address =
-    //     jito_vault_core::config::Config::find_program_address(&args.vault_program_id).0;
-    // match rpc_client.get_account(&config_address).await {
-    //     Ok(account) => {
-    //         let _config = Config::try_from_slice_unchecked(&account.data).expect("");
-    //         let handler = VaultHandler::new(
-    //             &args.rpc_url,
-    //             &payer,
-    //             args.vault_program_id,
-    //             pubkey!("7nVGRMDvUNLMeX6RLCo4qNSUEhSwW7k8wVQ7a8u1GFAp"),
-    //         );
-
-    //         handler
-    //             .initialize(pubkey!("k4T4gcpEzi4NgCstytnbTUeD4t4m5J91nQE8t8qtxt3"))
-    //             .await;
-    //     }
-    //     Err(_e) => {
-    let handler = VaultHandler::new(
+    let handler = VaultUpdateStateTrackerHandler::new(
         &args.rpc_url,
-        &payer,
+        payer,
         args.vault_program_id,
-        pubkey!("7nVGRMDvUNLMeX6RLCo4qNSUEhSwW7k8wVQ7a8u1GFAp"),
+        config_address,
+        config.epoch_length(),
     );
-    // handler.initialize_config().await;
 
-    handler
-        .initialize(pubkey!("6YRjbFsD2AoF7TtbHH5bhkMtD6biRv82P5Ympk8LzW9m"))
-        .await;
-    //     }
-    // }
+    let vaults: Vec<Pubkey> = list_ncn_vault_tickets(&rpc_client, &args.restaking_program_id)
+        .await
+        .into_iter()
+        .filter_map(|ticket| {
+            if ticket.ncn == args.ncn {
+                Some(ticket.vault)
+            } else {
+                None
+            }
+        })
+        .collect();
 
-    // let vault_addresses: Vec<Pubkey> = args
-    //     .vault_bases
-    //     .iter()
-    //     .map(|base| Vault::find_program_address(&args.vault_program_id, base).0)
-    //     .collect();
+    let operators: Vec<Pubkey> = list_ncn_operator_states(&rpc_client, &args.restaking_program_id)
+        .await
+        .into_iter()
+        .filter_map(|state| {
+            if state.ncn == args.ncn {
+                Some(state.operator)
+            } else {
+                None
+            }
+        })
+        .collect();
 
-    // let handler = VaultUpdateStateTrackerHandler::new(
-    //     &args.rpc_url,
-    //     payer,
-    //     args.vault_program_id,
-    //     config_address,
-    //     config.epoch_length(),
-    // );
+    let mut last_epoch = 0;
+    loop {
+        let slot = rpc_client.get_slot().await.expect("get slot");
+        let epoch = slot / config.epoch_length();
 
-    // let vault = handler.get_vault(args.vaults[0]).await;
-    // println!("Vault {:?}", vault);
+        if epoch != last_epoch {
+            // Crank
+            handler.crank(&vaults, &operators).await;
 
-    // let mut last_epoch = 0;
-    // loop {
-    // let slot = rpc_client.get_slot().await.expect("get slot");
-    // let epoch = slot / config.epoch_length();
+            // Close previous epoch's tracker
+            handler.close(&vaults, last_epoch).await;
 
-    // Initialize
-    // if epoch != last_epoch {
-    // handler.initialize(&args.vaults).await;
-    // }
+            // Initialize new tracker
+            handler.initialize(&vaults, epoch).await;
 
-    // Crank
-    // handler.crank(&args.vaults, &args.operators).await;
+            last_epoch = epoch;
+        }
 
-    //     // Close
-    // handler.close(&args.vaults).await;
+        // ---------- SLEEP (6 hours)----------
+        tokio::time::sleep(Duration::from_secs(6 * 60 * 60)).await;
+    }
+}
 
-    //     last_epoch = epoch;
-    // }
+pub async fn list_ncn_vault_tickets(
+    rpc_client: &RpcClient,
+    restaking_program_id: &Pubkey,
+) -> Vec<NcnVaultTicket> {
+    let accounts = rpc_client
+        .get_program_accounts_with_config(
+            restaking_program_id,
+            RpcProgramAccountsConfig {
+                filters: Some(vec![RpcFilterType::Memcmp(Memcmp::new(
+                    0,
+                    MemcmpEncodedBytes::Bytes(vec![NcnVaultTicket::DISCRIMINATOR]),
+                ))]),
+                account_config: RpcAccountInfoConfig {
+                    encoding: Some(UiAccountEncoding::Base64),
+                    data_slice: None,
+                    commitment: None,
+                    min_context_slot: None,
+                },
+                with_context: None,
+            },
+        )
+        .await
+        .expect("");
+
+    let tickets: Vec<NcnVaultTicket> = accounts
+        .iter()
+        .map(|(_ncn_pubkey, ncn_vault_ticket)| {
+            *NcnVaultTicket::try_from_slice_unchecked(&ncn_vault_ticket.data).expect("")
+        })
+        .collect();
+
+    tickets
+}
+
+pub async fn list_ncn_operator_states(
+    rpc_client: &RpcClient,
+    restaking_program_id: &Pubkey,
+) -> Vec<NcnOperatorState> {
+    let accounts = rpc_client
+        .get_program_accounts_with_config(
+            restaking_program_id,
+            RpcProgramAccountsConfig {
+                filters: Some(vec![RpcFilterType::Memcmp(Memcmp::new(
+                    0,
+                    MemcmpEncodedBytes::Bytes(vec![NcnOperatorState::DISCRIMINATOR]),
+                ))]),
+                account_config: RpcAccountInfoConfig {
+                    encoding: Some(UiAccountEncoding::Base64),
+                    data_slice: None,
+                    commitment: None,
+                    min_context_slot: None,
+                },
+                with_context: None,
+            },
+        )
+        .await
+        .expect("");
+
+    let states: Vec<NcnOperatorState> = accounts
+        .iter()
+        .map(|(_ncn_pubkey, ncn_vault_ticket)| {
+            *NcnOperatorState::try_from_slice_unchecked(&ncn_vault_ticket.data).expect("")
+        })
+        .collect();
+
+    states
 }

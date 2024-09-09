@@ -10,21 +10,14 @@ pub struct RestakingHandler<'a> {
     rpc_url: String,
     payer: &'a Keypair,
     restaking_program_id: Pubkey,
-    config_address: Pubkey,
 }
 
 impl<'a> RestakingHandler<'a> {
-    pub fn new(
-        rpc_url: &str,
-        payer: &'a Keypair,
-        restaking_program_id: Pubkey,
-        config_address: Pubkey,
-    ) -> Self {
+    pub fn new(rpc_url: &str, payer: &'a Keypair, restaking_program_id: Pubkey) -> Self {
         Self {
             rpc_url: rpc_url.to_string(),
             payer,
             restaking_program_id,
-            config_address,
         }
     }
 
@@ -83,7 +76,7 @@ impl<'a> RestakingHandler<'a> {
         let tx = Transaction::new_signed_with_payer(
             &[ix],
             Some(&self.payer.pubkey()),
-            &[&self.payer, &base],
+            &[self.payer, &base],
             blockhash,
         );
         rpc_client

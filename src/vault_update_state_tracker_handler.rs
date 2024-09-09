@@ -61,17 +61,13 @@ impl VaultUpdateStateTrackerHandler {
         *vault
     }
 
-    pub async fn initialize(&self, vaults: &[Pubkey]) {
+    pub async fn initialize(&self, vaults: &[Pubkey], epoch: u64) {
         let rpc_client = self.get_rpc_client();
-        let slot = rpc_client.get_slot().await.expect("get slot");
 
         for vault in vaults {
-            let tracker = VaultUpdateStateTracker::find_program_address(
-                &self.vault_program_id,
-                vault,
-                slot / self.epoch_length,
-            )
-            .0;
+            let tracker =
+                VaultUpdateStateTracker::find_program_address(&self.vault_program_id, vault, epoch)
+                    .0;
 
             println!("Vault Update State Tracker: {:?}", tracker);
 
@@ -112,15 +108,15 @@ impl VaultUpdateStateTrackerHandler {
             for operator in operators {
                 let vault_operator_delegation = &VaultOperatorDelegation::find_program_address(
                     &self.vault_program_id,
-                    &vault,
-                    &operator,
+                    vault,
+                    operator,
                 )
                 .0;
 
                 let mut ix_builder = CrankVaultUpdateStateTrackerBuilder::new();
                 let tracker = VaultUpdateStateTracker::find_program_address(
                     &self.vault_program_id,
-                    &vault,
+                    vault,
                     slot / self.epoch_length,
                 )
                 .0;
@@ -152,31 +148,30 @@ impl VaultUpdateStateTrackerHandler {
         }
     }
 
-    pub async fn close(&self, vaults: &[Pubkey]) {
+    pub async fn close(&self, vaults: &[Pubkey], epoch: u64) {
         let rpc_client = self.get_rpc_client();
         let slot = rpc_client.get_slot().await.expect("get slot");
 
         for vault in vaults {
             let mut ix_builder = CloseVaultUpdateStateTrackerBuilder::new();
-            let tracker = VaultUpdateStateTracker::find_program_address(
-                &self.vault_program_id,
-                &vault,
-                slot / self.epoch_length,
-            )
-            .0;
+            let tracker =
+                VaultUpdateStateTracker::find_program_address(&self.vault_program_id, vault, epoch)
+                    .0;
             ix_builder
                 .config(self.config_address)
                 .vault(*vault)
                 .vault_update_state_tracker(tracker)
                 .payer(self.payer.pubkey())
                 .ncn_epoch(slot / self.epoch_length);
+            let mut ix = ix_builder.instruction();
+            ix.program_id = self.vault_program_id;
 
             let blockhash = rpc_client
                 .get_latest_blockhash()
                 .await
                 .expect("get latest blockhash");
             let tx = Transaction::new_signed_with_payer(
-                &[ix_builder.instruction()],
+                &[ix],
                 Some(&self.payer.pubkey()),
                 &[&self.payer],
                 blockhash,
