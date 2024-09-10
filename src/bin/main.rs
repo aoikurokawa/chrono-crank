@@ -1,15 +1,10 @@
 use std::{path::PathBuf, time::Duration};
 
+use anyhow::Context;
 use chrono_crank::vault_update_state_tracker_handler::VaultUpdateStateTrackerHandler;
 use clap::Parser;
-use jito_bytemuck::{AccountDeserialize, Discriminator};
-use jito_restaking_core::{ncn_operator_state::NcnOperatorState, ncn_vault_ticket::NcnVaultTicket};
-use solana_account_decoder::UiAccountEncoding;
-use solana_client::{
-    nonblocking::rpc_client::RpcClient,
-    rpc_config::{RpcAccountInfoConfig, RpcProgramAccountsConfig},
-    rpc_filter::{Memcmp, MemcmpEncodedBytes, RpcFilterType},
-};
+use jito_bytemuck::AccountDeserialize;
+use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::{pubkey::Pubkey, signature::read_keypair_file};
 
 #[derive(Parser)]
@@ -44,7 +39,9 @@ struct Args {
 }
 
 #[tokio::main]
-async fn main() {
+async fn main() -> anyhow::Result<(), anyhow::Error> {
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
+
     let args = Args::parse();
     let rpc_client = RpcClient::new_with_timeout(args.rpc_url.clone(), Duration::from_secs(60));
     let payer = read_keypair_file(args.keypair).expect("read keypair file");
@@ -52,132 +49,52 @@ async fn main() {
     let config_address =
         jito_vault_core::config::Config::find_program_address(&args.vault_program_id).0;
 
-    let account = rpc_client.get_account(&config_address).await.expect("");
-    let config =
-        jito_vault_core::config::Config::try_from_slice_unchecked(&account.data).expect("");
+    let account = rpc_client
+        .get_account(&config_address)
+        .await
+        .expect("Failed to read Jito vault config address");
+    let config = jito_vault_core::config::Config::try_from_slice_unchecked(&account.data)
+        .expect("Failed to deserialize Jito vault config");
 
     let handler = VaultUpdateStateTrackerHandler::new(
         &args.rpc_url,
         payer,
+        args.restaking_program_id,
         args.vault_program_id,
         config_address,
         config.epoch_length(),
     );
 
-    let vaults: Vec<Pubkey> = list_ncn_vault_tickets(&rpc_client, &args.restaking_program_id)
-        .await
-        .into_iter()
-        .filter_map(|ticket| {
-            if ticket.ncn == args.ncn {
-                Some(ticket.vault)
-            } else {
-                None
-            }
-        })
-        .collect();
+    let vaults: Vec<Pubkey> = handler.get_vaults(args.ncn).await?;
 
-    let operators: Vec<Pubkey> = list_ncn_operator_states(&rpc_client, &args.restaking_program_id)
-        .await
-        .into_iter()
-        .filter_map(|state| {
-            if state.ncn == args.ncn {
-                Some(state.operator)
-            } else {
-                None
-            }
-        })
-        .collect();
+    // Initialize new tracker
+    let slot = rpc_client.get_slot().await.context("get slot")?;
+    let epoch = slot / config.epoch_length();
+    handler.initialize(&vaults, epoch).await?;
 
-    println!("Vaults: {:?}", vaults);
-    println!("Operators: {:?}", operators);
+    let mut last_epoch = epoch;
+    loop {
+        let slot = rpc_client.get_slot().await.context("get slot")?;
+        let epoch = slot / config.epoch_length();
 
-    // let mut last_epoch = 0;
-    // loop {
-    //     let slot = rpc_client.get_slot().await.expect("get slot");
-    //     let epoch = slot / config.epoch_length();
+        if epoch != last_epoch {
+            let vaults: Vec<Pubkey> = handler.get_vaults(args.ncn).await?;
 
-    //     if epoch != last_epoch {
-    //         // Crank
-    //         handler.crank(&vaults, &operators).await;
+            let operators: Vec<Pubkey> = handler.get_operators(args.ncn).await?;
 
-    //         // Close previous epoch's tracker
-    //         handler.close(&vaults, last_epoch).await;
+            // Crank
+            handler.crank(&vaults, &operators).await?;
 
-    //         // Initialize new tracker
-    //         handler.initialize(&vaults, epoch).await;
+            // Close previous epoch's tracker
+            handler.close(&vaults, last_epoch).await?;
 
-    //         last_epoch = epoch;
-    //     }
+            // Initialize new tracker
+            handler.initialize(&vaults, epoch).await?;
 
-    //     // ---------- SLEEP (6 hours)----------
-    //     tokio::time::sleep(Duration::from_secs(6 * 60 * 60)).await;
-    // }
-}
+            last_epoch = epoch;
+        }
 
-pub async fn list_ncn_vault_tickets(
-    rpc_client: &RpcClient,
-    restaking_program_id: &Pubkey,
-) -> Vec<NcnVaultTicket> {
-    let accounts = rpc_client
-        .get_program_accounts_with_config(
-            restaking_program_id,
-            RpcProgramAccountsConfig {
-                filters: Some(vec![RpcFilterType::Memcmp(Memcmp::new(
-                    0,
-                    MemcmpEncodedBytes::Bytes(vec![NcnVaultTicket::DISCRIMINATOR]),
-                ))]),
-                account_config: RpcAccountInfoConfig {
-                    encoding: Some(UiAccountEncoding::Base64),
-                    data_slice: None,
-                    commitment: None,
-                    min_context_slot: None,
-                },
-                with_context: None,
-            },
-        )
-        .await
-        .expect("");
-
-    let tickets: Vec<NcnVaultTicket> = accounts
-        .iter()
-        .map(|(_ncn_pubkey, ncn_vault_ticket)| {
-            *NcnVaultTicket::try_from_slice_unchecked(&ncn_vault_ticket.data).expect("")
-        })
-        .collect();
-
-    tickets
-}
-
-pub async fn list_ncn_operator_states(
-    rpc_client: &RpcClient,
-    restaking_program_id: &Pubkey,
-) -> Vec<NcnOperatorState> {
-    let accounts = rpc_client
-        .get_program_accounts_with_config(
-            restaking_program_id,
-            RpcProgramAccountsConfig {
-                filters: Some(vec![RpcFilterType::Memcmp(Memcmp::new(
-                    0,
-                    MemcmpEncodedBytes::Bytes(vec![NcnOperatorState::DISCRIMINATOR]),
-                ))]),
-                account_config: RpcAccountInfoConfig {
-                    encoding: Some(UiAccountEncoding::Base64),
-                    data_slice: None,
-                    commitment: None,
-                    min_context_slot: None,
-                },
-                with_context: None,
-            },
-        )
-        .await
-        .expect("");
-
-    let states: Vec<NcnOperatorState> = accounts
-        .iter()
-        .map(|(_ncn_pubkey, ncn_vault_ticket)| {
-            *NcnOperatorState::try_from_slice_unchecked(&ncn_vault_ticket.data).expect("")
-        })
-        .collect();
-
-    states
+        // ---------- SLEEP (1 hour)----------
+        tokio::time::sleep(Duration::from_secs(1 * 60 * 60)).await;
+    }
 }
