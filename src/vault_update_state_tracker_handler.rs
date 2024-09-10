@@ -194,9 +194,14 @@ impl VaultUpdateStateTrackerHandler {
                 blockhash,
             );
 
-            if let Err(e) = rpc_client.send_and_confirm_transaction(&tx).await {
-                log::error!("Failed to send transaction: {:?}", e);
-                return Err(anyhow::Error::new(e).context("Failed to send transaction"));
+            match rpc_client.send_and_confirm_transaction(&tx).await {
+                Ok(sig) => {
+                    log::info!("Transaction confirmed: {:?}", sig);
+                }
+                Err(e) => {
+                    log::error!("Failed to send transaction: {:?}", e);
+                    return Err(anyhow::Error::new(e).context("Failed to send transaction"));
+                }
             }
         }
 
@@ -252,9 +257,14 @@ impl VaultUpdateStateTrackerHandler {
                     blockhash,
                 );
 
-                if let Err(e) = rpc_client.send_and_confirm_transaction(&tx).await {
-                    log::error!("Failed to send transaction: {:?}", e);
-                    return Err(anyhow::Error::new(e).context("Failed to send transaction"));
+                match rpc_client.send_and_confirm_transaction(&tx).await {
+                    Ok(sig) => {
+                        log::info!("Transaction confirmed: {:?}", sig);
+                    }
+                    Err(e) => {
+                        log::error!("Failed to send transaction: {:?}", e);
+                        return Err(anyhow::Error::new(e).context("Failed to send transaction"));
+                    }
                 }
             }
         }
@@ -297,9 +307,14 @@ impl VaultUpdateStateTrackerHandler {
                 blockhash,
             );
 
-            if let Err(e) = rpc_client.send_and_confirm_transaction(&tx).await {
-                log::error!("Failed to send transaction: {:?}", e);
-                return Err(anyhow::Error::new(e).context("Failed to send transaction"));
+            match rpc_client.send_and_confirm_transaction(&tx).await {
+                Ok(sig) => {
+                    log::info!("Transaction confirmed: {:?}", sig);
+                }
+                Err(e) => {
+                    log::error!("Failed to send transaction: {:?}", e);
+                    return Err(anyhow::Error::new(e).context("Failed to send transaction"));
+                }
             }
         }
 

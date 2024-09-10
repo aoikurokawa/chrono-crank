@@ -1,5 +1,25 @@
 # Chrono Crank
 
+## Getting started
+
+### Install Rust
+
+```
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+```
+
+### Install Solana CLI
+
+```
+sh -c "$(curl -sSfL https://release.solana.com/v1.18.18/install)"
+```
+
+### Clone the repo
+
+```
+git clone 
+```
+
 ## JITO Vault Program
 https://docs.restaking.jito.network/
 
