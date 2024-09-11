@@ -2,22 +2,10 @@
 
 ## Getting started
 
-### Install Rust
+Run a cranker
 
-```
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-```
-
-### Install Solana CLI
-
-```
-sh -c "$(curl -sSfL https://release.solana.com/v1.18.18/install)"
-```
-
-### Clone the repo
-
-```
-git clone 
+```bash
+ cargo r -- --rpc-url {} --keypair {} --vault-program-id {} --restaking-program-id {} --ncn {}
 ```
 
 ## JITO Vault Program

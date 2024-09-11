@@ -101,6 +101,6 @@ async fn main() -> anyhow::Result<(), anyhow::Error> {
         }
 
         // ---------- SLEEP (1 hour)----------
-        tokio::time::sleep(Duration::from_secs(1 * 60 * 60)).await;
+        tokio::time::sleep(Duration::from_secs(60 * 60)).await;
     }
 }
