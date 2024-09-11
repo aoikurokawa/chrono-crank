@@ -1,4 +1,4 @@
-use std::{path::PathBuf, time::Duration};
+use std::{fs::File, path::PathBuf, time::Duration};
 
 use anyhow::Context;
 use chrono_crank::vault_update_state_tracker_handler::VaultUpdateStateTrackerHandler;
@@ -40,7 +40,11 @@ struct Args {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<(), anyhow::Error> {
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
+    let log_file = File::create("app.log").expect("create log file");
+
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
+        .target(env_logger::Target::Pipe(Box::new(log_file)))
+        .init();
 
     let args = Args::parse();
     let rpc_client = RpcClient::new_with_timeout(args.rpc_url.clone(), Duration::from_secs(60));
