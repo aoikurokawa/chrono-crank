@@ -10,7 +10,7 @@ use solana_sdk::{pubkey::Pubkey, signature::read_keypair_file};
 #[derive(Parser)]
 struct Args {
     /// RPC URL for the cluster
-    #[arg(short, long, env, default_value = "http://localhost:8899")]
+    #[arg(short, long, env, default_value = "https://api.devnet.solana.com")]
     rpc_url: String,
 
     /// Path to keypair used to pay
@@ -21,15 +21,15 @@ struct Args {
     #[arg(
         long,
         env,
-        default_value = "BLCDL7LqxaYWxSEkayc4VYjs3iCNJJw8SQzsvEL2uVT"
+        default_value = "34X2uqBhEGiWHu43RDEMwrMqXF4CpCPEZNaKdAaUS9jx"
     )]
     vault_program_id: Pubkey,
 
-    /// Validator history program ID (Pubkey as base58 string)
+    /// Restaking program ID (Pubkey as base58 string)
     #[arg(
         long,
         env,
-        default_value = "5b2dHDz9DLhXnwQDG612bgtBGJD62Riw9s9eYuDT3Zma"
+        default_value = "78J8YzXGGNynLRpn85MH77PVLBZsWyLCHZAXRvKaB6Ng"
     )]
     restaking_program_id: Pubkey,
 
