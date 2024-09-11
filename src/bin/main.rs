@@ -81,6 +81,8 @@ async fn main() -> anyhow::Result<(), anyhow::Error> {
         let slot = rpc_client.get_slot().await.context("get slot")?;
         let epoch = slot / config.epoch_length();
 
+        log::info!("Slot: {slot}, Current Epoch: {epoch}, Last Epoch: {last_epoch}");
+
         if epoch != last_epoch {
             let vaults: Vec<Pubkey> = handler.get_vaults(args.ncn).await?;
 
