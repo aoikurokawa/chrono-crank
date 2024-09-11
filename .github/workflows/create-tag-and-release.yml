@@ -1,0 +1,29 @@
+name: Create Tag and Release
+
+on:
+  pull_request:
+    types:
+      - closed
+
+jobs:
+  create:
+    if: startsWith(github.head_ref, 'release/') && github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create a tag string
+        id: extract_tag
+        run: echo "::set-output name=custom_tag::$(echo '${{ github.event.pull_request.head.ref }}' | sed 's/release\///')"
+        shell: bash
+      - name: Create a tag
+        id: tag_version
+        uses: mathieudutour/github-tag-action@v6.1
+        with:
+          custom_tag: ${{ steps.extract_tag.outputs.custom_tag }}
+          tag_prefix:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Create a GitHub release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: ${{ steps.tag_version.outputs.new_tag }}
+          name: ${{ steps.tag_version.outputs.new_tag }}
+          body: ${{ github.event.pull_request.body }}
