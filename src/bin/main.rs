@@ -10,7 +10,7 @@ use solana_sdk::{pubkey::Pubkey, signature::read_keypair_file};
 #[derive(Parser)]
 struct Args {
     /// RPC URL for the cluster
-    #[arg(short, long, env, default_value = "http://localhost:8899")]
+    #[arg(short, long, env, default_value = "https://api.devnet.solana.com")]
     rpc_url: String,
 
     /// Path to keypair used to pay
@@ -21,15 +21,15 @@ struct Args {
     #[arg(
         long,
         env,
-        default_value = "BLCDL7LqxaYWxSEkayc4VYjs3iCNJJw8SQzsvEL2uVT"
+        default_value = "34X2uqBhEGiWHu43RDEMwrMqXF4CpCPEZNaKdAaUS9jx"
     )]
     vault_program_id: Pubkey,
 
-    /// Validator history program ID (Pubkey as base58 string)
+    /// Restaking program ID (Pubkey as base58 string)
     #[arg(
         long,
         env,
-        default_value = "5b2dHDz9DLhXnwQDG612bgtBGJD62Riw9s9eYuDT3Zma"
+        default_value = "78J8YzXGGNynLRpn85MH77PVLBZsWyLCHZAXRvKaB6Ng"
     )]
     restaking_program_id: Pubkey,
 
@@ -84,7 +84,10 @@ async fn main() -> anyhow::Result<(), anyhow::Error> {
         log::info!("Slot: {slot}, Current Epoch: {epoch}, Last Epoch: {last_epoch}");
 
         if epoch != last_epoch {
-            let vaults: Vec<Pubkey> = handler.get_vaults(args.ncn).await?;
+            let vaults: Vec<Pubkey> = match handler.get_vaults(args.ncn).await {
+                Ok(v) => v,
+                Err(_) => vaults.clone(),
+            };
 
             let operators: Vec<Pubkey> = handler.get_operators(args.ncn).await?;
 
@@ -101,6 +104,6 @@ async fn main() -> anyhow::Result<(), anyhow::Error> {
         }
 
         // ---------- SLEEP (1 hour)----------
-        tokio::time::sleep(Duration::from_secs(1 * 60 * 60)).await;
+        tokio::time::sleep(Duration::from_secs(60 * 60)).await;
     }
 }

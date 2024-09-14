@@ -55,6 +55,26 @@ impl VaultUpdateStateTrackerHandler {
         RpcClient::new_with_commitment(self.rpc_url.clone(), CommitmentConfig::confirmed())
     }
 
+    async fn get_update_state_tracker(
+        &self,
+        tracker: &Pubkey,
+    ) -> anyhow::Result<VaultUpdateStateTracker> {
+        let rpc_client = self.get_rpc_client();
+        match rpc_client.get_account(tracker).await {
+            Ok(account) => match VaultUpdateStateTracker::try_from_slice_unchecked(&account.data) {
+                Ok(tracker) => Ok(*tracker),
+                Err(e) => {
+                    log::error!("Error: Failed deserializing VaultUpdateStateTracker: {tracker}");
+                    Err(anyhow::Error::new(e).context("Failed deserialzing"))
+                }
+            },
+            Err(e) => {
+                log::error!("Error: Failed to get VaultUpdateStateTracker account: {tracker}");
+                Err(anyhow::Error::new(e).context("Failed to get VaultUpdateStateTracker"))
+            }
+        }
+    }
+
     pub async fn get_vaults(&self, ncn_address: Pubkey) -> anyhow::Result<Vec<Pubkey>> {
         let rpc_client = self.get_rpc_client();
         let accounts = rpc_client
@@ -166,6 +186,11 @@ impl VaultUpdateStateTrackerHandler {
             let tracker =
                 VaultUpdateStateTracker::find_program_address(&self.vault_program_id, vault, epoch)
                     .0;
+
+            if self.get_update_state_tracker(&tracker).await.is_ok() {
+                log::info!("VaultUpdateStateTracker already exists: {tracker}");
+                continue;
+            }
 
             log::info!("Initialize Vault Update State Tracker: {:?}", tracker);
 
