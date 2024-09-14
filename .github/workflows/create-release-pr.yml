@@ -25,12 +25,3 @@ jobs:
       - run: gem install --no-document git-pr-release
       - name: Create PR for release
         run: git-pr-release --squash
-        env:
-          GIT_PR_RELEASE_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GIT_PR_RELEASE_BRANCH_PRODUCTION: main
-          GIT_PR_RELEASE_BRANCH_STAGING: ${{ env.RELEASE_BRANCH_NAME }}
-          GIT_PR_RELEASE_LABELS: release
-          GIT_PR_RELEASE_TEMPLATE: pr-release.template.erb
-          TZ: Asia/Tokyo
-
-

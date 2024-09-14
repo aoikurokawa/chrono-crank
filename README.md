@@ -50,13 +50,5 @@ Operator
 - 9ifGFrivr8st3Kg5DvUP5Gc3kXp7PAta75o5ZMAM2eL9
 
 
-## Help
-
-### Create a token
-
-```bash
-spl-token create-token
-```
-
 ## Resources
 - https://github.com/jito-foundation/restaking
