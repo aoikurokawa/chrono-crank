@@ -25,3 +25,7 @@ jobs:
       - run: gem install --no-document git-pr-release
       - name: Create PR for release
         uses: bakunyo/git-pr-release-action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          args: '--squashed' # If you are using squash merge
