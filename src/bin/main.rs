@@ -84,7 +84,10 @@ async fn main() -> anyhow::Result<(), anyhow::Error> {
         log::info!("Slot: {slot}, Current Epoch: {epoch}, Last Epoch: {last_epoch}");
 
         if epoch != last_epoch {
-            let vaults: Vec<Pubkey> = handler.get_vaults(args.ncn).await?;
+            let vaults: Vec<Pubkey> = match handler.get_vaults(args.ncn).await {
+                Ok(v) => v,
+                Err(_) => vaults.clone(),
+            };
 
             let operators: Vec<Pubkey> = handler.get_operators(args.ncn).await?;
 

@@ -65,12 +65,12 @@ impl VaultUpdateStateTrackerHandler {
                 Ok(tracker) => Ok(*tracker),
                 Err(e) => {
                     log::error!("Error: Failed deserializing VaultUpdateStateTracker: {tracker}");
-                    return Err(anyhow::Error::new(e).context("Failed deserialzing"));
+                    Err(anyhow::Error::new(e).context("Failed deserialzing"))
                 }
             },
             Err(e) => {
                 log::error!("Error: Failed to get VaultUpdateStateTracker account: {tracker}");
-                return Err(anyhow::Error::new(e).context("Failed to get VaultUpdateStateTracker"));
+                Err(anyhow::Error::new(e).context("Failed to get VaultUpdateStateTracker"))
             }
         }
     }
@@ -186,6 +186,11 @@ impl VaultUpdateStateTrackerHandler {
             let tracker =
                 VaultUpdateStateTracker::find_program_address(&self.vault_program_id, vault, epoch)
                     .0;
+
+            if self.get_update_state_tracker(&tracker).await.is_ok() {
+                log::info!("VaultUpdateStateTracker already exists: {tracker}");
+                continue;
+            }
 
             log::info!("Initialize Vault Update State Tracker: {:?}", tracker);
 
