@@ -6,7 +6,16 @@ on:
       - closed
 
 jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: Run cargo build
+      run: cargo build --verbose
+
   create:
+    needs:
+      - build
     if: startsWith(github.head_ref, 'release/') && github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     steps:
@@ -27,3 +36,5 @@ jobs:
           tag: ${{ steps.tag_version.outputs.new_tag }}
           name: ${{ steps.tag_version.outputs.new_tag }}
           body: ${{ github.event.pull_request.body }}
+          files: |
+            chrono-crank
