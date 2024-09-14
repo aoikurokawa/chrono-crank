@@ -22,13 +22,15 @@ jobs:
         run: |
           git checkout -b ${{ env.RELEASE_BRANCH_NAME }}
           git push origin ${{ env.RELEASE_BRANCH_NAME }}
-      - run: gem install --no-document git-pr-release
-      - name: Create PR for release
-        run: git-pr-release --squash
-        env:
-          GIT_PR_RELEASE_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GIT_PR_RELEASE_BRANCH_PRODUCTION: main
-          GIT_PR_RELEASE_BRANCH_STAGING: ${{ env.RELEASE_BRANCH_NAME }}
-          GIT_PR_RELEASE_LABELS: release
-          GIT_PR_RELEASE_TEMPLATE: pr-release.template.erb
-          TZ: Asia/Tokyo
+      - name: Create PR
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            github.rest.pulls.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: 'Bump version to ${{ steps.parse_info.outputs.next_version }}',
+              head: 'version-bump-${{ steps.parse_info.outputs.next_version }}',
+              base: '${{ steps.parse_info.outputs.target_branch }}'
+            })
