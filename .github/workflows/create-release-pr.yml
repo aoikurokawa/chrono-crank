@@ -24,4 +24,8 @@ jobs:
           git push origin ${{ env.RELEASE_BRANCH_NAME }}
       - run: gem install --no-document git-pr-release
       - name: Create PR for release
-        run: git-pr-release --squash
+        uses: bakunyo/git-pr-release-action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          args: '--squashed'
