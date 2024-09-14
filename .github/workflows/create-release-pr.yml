@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Input version'
+        description: 'Version'
         required: true
 
 jobs:
@@ -22,6 +22,15 @@ jobs:
         run: |
           git checkout -b ${{ env.RELEASE_BRANCH_NAME }}
           git push origin ${{ env.RELEASE_BRANCH_NAME }}
-      - run: gem install --no-document git-pr-release
-      - name: Create PR for release
-        run: git-pr-release --squash
+      - name: Create PR
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            github.rest.pulls.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: 'Bump version to ${{ steps.parse_info.outputs.next_version }}',
+              head: 'version-bump-${{ steps.parse_info.outputs.next_version }}',
+              base: '${{ steps.parse_info.outputs.target_branch }}'
+            })
