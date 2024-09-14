@@ -1,7 +1,9 @@
 use std::{fs::File, path::PathBuf, time::Duration};
 
 use anyhow::Context;
-use chrono_crank::vault_update_state_tracker_handler::VaultUpdateStateTrackerHandler;
+use chrono_crank::{
+    vault_handler::VaultHandler, vault_update_state_tracker_handler::VaultUpdateStateTrackerHandler,
+};
 use clap::Parser;
 use jito_bytemuck::AccountDeserialize;
 use solana_client::nonblocking::rpc_client::RpcClient;
@@ -60,20 +62,35 @@ async fn main() -> anyhow::Result<(), anyhow::Error> {
     let config = jito_vault_core::config::Config::try_from_slice_unchecked(&account.data)
         .expect("Failed to deserialize Jito vault config");
 
+    let vault_handler =
+        VaultHandler::new(&args.rpc_url, &payer, args.vault_program_id, config_address);
     let handler = VaultUpdateStateTrackerHandler::new(
         &args.rpc_url,
-        payer,
+        &payer,
         args.restaking_program_id,
         args.vault_program_id,
         config_address,
         config.epoch_length(),
     );
 
-    let vaults: Vec<Pubkey> = handler.get_vaults(args.ncn).await?;
+    let ncn_vault_tickets: Vec<Pubkey> = handler.get_ncn_vault_tickets(args.ncn).await?;
+    let vaults = vault_handler.get_vaults(&ncn_vault_tickets).await?;
 
-    // Initialize new tracker
     let slot = rpc_client.get_slot().await.context("get slot")?;
     let epoch = slot / config.epoch_length();
+
+    let vaults: Vec<Pubkey> = vaults
+        .iter()
+        .filter_map(|(pubkey, vault)| {
+            // Initialize new tracker
+            if vault.last_full_state_update_slot() / config.epoch_length() != epoch {
+                Some(*pubkey)
+            } else {
+                None
+            }
+        })
+        .collect();
+
     handler.initialize(&vaults, epoch).await?;
 
     let mut last_epoch = epoch;
@@ -84,10 +101,23 @@ async fn main() -> anyhow::Result<(), anyhow::Error> {
         log::info!("Slot: {slot}, Current Epoch: {epoch}, Last Epoch: {last_epoch}");
 
         if epoch != last_epoch {
-            let vaults: Vec<Pubkey> = match handler.get_vaults(args.ncn).await {
+            let ncn_vault_tickets: Vec<Pubkey> = match handler.get_ncn_vault_tickets(args.ncn).await
+            {
                 Ok(v) => v,
                 Err(_) => vaults.clone(),
             };
+            let vaults = vault_handler.get_vaults(&ncn_vault_tickets).await?;
+            let vaults: Vec<Pubkey> = vaults
+                .iter()
+                .filter_map(|(pubkey, vault)| {
+                    // Initialize new tracker
+                    if vault.last_full_state_update_slot() / config.epoch_length() != epoch {
+                        Some(*pubkey)
+                    } else {
+                        None
+                    }
+                })
+                .collect();
 
             let operators: Vec<Pubkey> = handler.get_operators(args.ncn).await?;
 

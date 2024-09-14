@@ -1,3 +1,5 @@
+use anyhow::Context;
+use jito_bytemuck::AccountDeserialize;
 use jito_vault_client::instructions::{InitializeConfigBuilder, InitializeVaultBuilder};
 use jito_vault_core::{config::Config, vault::Vault};
 use solana_client::nonblocking::rpc_client::RpcClient;
@@ -30,6 +32,34 @@ impl<'a> VaultHandler<'a> {
 
     fn get_rpc_client(&self) -> RpcClient {
         RpcClient::new_with_commitment(self.rpc_url.clone(), CommitmentConfig::confirmed())
+    }
+
+    pub async fn get_vaults(
+        &self,
+        vault_pubkeys: &[Pubkey],
+    ) -> anyhow::Result<Vec<(Pubkey, Vault)>> {
+        let rpc_client = self.get_rpc_client();
+
+        let mut accounts = Vec::new();
+        for vault_pubkey in vault_pubkeys {
+            let account = rpc_client
+                .get_account(vault_pubkey)
+                .await
+                .context("Error: Failed to get Vault accounts")?;
+            accounts.push((vault_pubkey, account));
+        }
+
+        let vaults: Vec<(Pubkey, Vault)> = accounts
+            .iter()
+            .filter_map(|(pubkey, acc)| {
+                let vault = Vault::try_from_slice_unchecked(&acc.data)
+                    .context("Error: Failed to deserailize")
+                    .ok()?;
+                Some((**pubkey, *vault))
+            })
+            .collect();
+
+        Ok(vaults)
     }
 
     pub async fn initialize_config(&self) {

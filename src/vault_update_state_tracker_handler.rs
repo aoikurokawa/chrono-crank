@@ -23,19 +23,19 @@ use solana_sdk::{
     system_program, transaction::Transaction,
 };
 
-pub struct VaultUpdateStateTrackerHandler {
+pub struct VaultUpdateStateTrackerHandler<'a> {
     rpc_url: String,
-    payer: Keypair,
+    payer: &'a Keypair,
     restaking_program_id: Pubkey,
     vault_program_id: Pubkey,
     config_address: Pubkey,
     epoch_length: u64,
 }
 
-impl VaultUpdateStateTrackerHandler {
+impl<'a> VaultUpdateStateTrackerHandler<'a> {
     pub fn new(
         rpc_url: &str,
-        payer: Keypair,
+        payer: &'a Keypair,
         restaking_program_id: Pubkey,
         vault_program_id: Pubkey,
         config_address: Pubkey,
@@ -75,7 +75,7 @@ impl VaultUpdateStateTrackerHandler {
         }
     }
 
-    pub async fn get_vaults(&self, ncn_address: Pubkey) -> anyhow::Result<Vec<Pubkey>> {
+    pub async fn get_ncn_vault_tickets(&self, ncn_address: Pubkey) -> anyhow::Result<Vec<Pubkey>> {
         let rpc_client = self.get_rpc_client();
         let accounts = rpc_client
             .get_program_accounts_with_config(
