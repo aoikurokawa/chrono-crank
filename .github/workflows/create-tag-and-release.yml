@@ -36,6 +36,11 @@ jobs:
           custom_tag: ${{ steps.extract_tag.outputs.custom_tag }}
           tag_prefix:
           github_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+      - run: ls -lh
       - name: Create a GitHub release
         uses: ncipollo/release-action@v1
         with:
