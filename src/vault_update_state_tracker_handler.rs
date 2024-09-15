@@ -75,6 +75,26 @@ impl<'a> VaultUpdateStateTrackerHandler<'a> {
         }
     }
 
+    async fn get_vault_operator_delegation(
+        &self,
+        vault_operator_delegation: &Pubkey,
+    ) -> anyhow::Result<VaultOperatorDelegation> {
+        let rpc_client = self.get_rpc_client();
+        match rpc_client.get_account(vault_operator_delegation).await {
+            Ok(account) => match VaultOperatorDelegation::try_from_slice_unchecked(&account.data) {
+                Ok(delegation) => Ok(*delegation),
+                Err(e) => {
+                    log::error!("Error: Failed deserializing VaultOperatorDelegation: {vault_operator_delegation}");
+                    Err(anyhow::Error::new(e).context("Failed deserialzing"))
+                }
+            },
+            Err(e) => {
+                log::error!("Error: Failed to get VaultOperatorDelegation account: {vault_operator_delegation}");
+                Err(anyhow::Error::new(e).context("Failed to get VaultOperatorDelegation"))
+            }
+        }
+    }
+
     pub async fn get_ncn_vault_tickets(&self, ncn_address: Pubkey) -> anyhow::Result<Vec<Pubkey>> {
         let rpc_client = self.get_rpc_client();
         let accounts = rpc_client
@@ -239,12 +259,20 @@ impl<'a> VaultUpdateStateTrackerHandler<'a> {
 
         for vault in vaults {
             for operator in operators {
-                let vault_operator_delegation = &VaultOperatorDelegation::find_program_address(
+                let vault_operator_delegation = VaultOperatorDelegation::find_program_address(
                     &self.vault_program_id,
                     vault,
                     operator,
                 )
                 .0;
+
+                if let Err(_e) = self
+                    .get_vault_operator_delegation(&vault_operator_delegation)
+                    .await
+                {
+                    log::error!("Error: Can not find vault operator delegation: {vault_operator_delegation}");
+                    continue;
+                }
                 let tracker = VaultUpdateStateTracker::find_program_address(
                     &self.vault_program_id,
                     vault,
@@ -263,7 +291,7 @@ impl<'a> VaultUpdateStateTrackerHandler<'a> {
                     .config(self.config_address)
                     .vault(*vault)
                     .operator(*operator)
-                    .vault_operator_delegation(*vault_operator_delegation)
+                    .vault_operator_delegation(vault_operator_delegation)
                     .vault_update_state_tracker(tracker);
                 let mut ix = ix_builder.instruction();
                 ix.program_id = self.vault_program_id;
