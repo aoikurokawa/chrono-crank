@@ -36,17 +36,17 @@ impl<'a> VaultHandler<'a> {
 
     pub async fn get_vaults(
         &self,
-        vault_pubkeys: &[Pubkey],
+        ncn_vault_tickets: &[Pubkey],
     ) -> anyhow::Result<Vec<(Pubkey, Vault)>> {
         let rpc_client = self.get_rpc_client();
 
         let mut accounts = Vec::new();
-        for vault_pubkey in vault_pubkeys {
+        for ticket in ncn_vault_tickets {
             let account = rpc_client
-                .get_account(vault_pubkey)
+                .get_account(ticket)
                 .await
-                .context("Error: Failed to get Vault accounts")?;
-            accounts.push((vault_pubkey, account));
+                .context("Error: Failed to get NCNVaultTicket accounts")?;
+            accounts.push((ticket, account));
         }
 
         let vaults: Vec<(Pubkey, Vault)> = accounts
