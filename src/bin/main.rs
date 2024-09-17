@@ -94,13 +94,14 @@ async fn main() -> anyhow::Result<(), anyhow::Error> {
     handler.initialize(&vaults, epoch).await?;
 
     let mut last_epoch = epoch;
+    let mut count = 0;
     loop {
         let slot = rpc_client.get_slot().await.context("get slot")?;
         let epoch = slot / config.epoch_length();
 
         log::info!("Slot: {slot}, Current Epoch: {epoch}, Last Epoch: {last_epoch}");
 
-        if epoch != last_epoch {
+        if epoch != last_epoch || count < 5 {
             let ncn_vault_tickets: Vec<Pubkey> = match handler.get_ncn_vault_tickets(args.ncn).await
             {
                 Ok(v) => v,
@@ -119,18 +120,23 @@ async fn main() -> anyhow::Result<(), anyhow::Error> {
                 })
                 .collect();
 
-            let operators: Vec<Pubkey> = handler.get_operators(args.ncn).await?;
-
-            // Crank
-            handler.crank(&vaults, &operators).await?;
-
             // Close previous epoch's tracker
-            handler.close(&vaults, last_epoch).await?;
+            match handler.close(&vaults, last_epoch).await {
+                Ok(()) => {
+                    // Initialize new tracker
+                    handler.initialize(&vaults, epoch).await?;
 
-            // Initialize new tracker
-            handler.initialize(&vaults, epoch).await?;
+                    last_epoch = epoch;
+                }
+                Err(e) => {
+                    count += 1;
 
-            last_epoch = epoch;
+                    if count == 5 {
+                        log::error!("Error: Failed to close tracker");
+                        return Err(e);
+                    }
+                }
+            }
         }
 
         // ---------- SLEEP (1 hour)----------
