@@ -1,11 +1,20 @@
+use std::collections::HashMap;
+
 use anyhow::Context;
-use jito_bytemuck::AccountDeserialize;
-use jito_vault_client::instructions::{InitializeConfigBuilder, InitializeVaultBuilder};
-use jito_vault_core::{config::Config, vault::Vault};
-use solana_client::nonblocking::rpc_client::RpcClient;
+use jito_bytemuck::{AccountDeserialize, Discriminator};
+use jito_vault_client::instructions::InitializeVaultBuilder;
+use jito_vault_core::{
+    config::Config, vault::Vault, vault_operator_delegation::VaultOperatorDelegation,
+};
+use solana_account_decoder::UiAccountEncoding;
+use solana_client::{
+    nonblocking::rpc_client::RpcClient,
+    rpc_config::{RpcAccountInfoConfig, RpcProgramAccountsConfig},
+    rpc_filter::{Memcmp, MemcmpEncodedBytes, RpcFilterType},
+};
 use solana_sdk::{
-    commitment_config::CommitmentConfig, pubkey, pubkey::Pubkey, signature::Keypair,
-    signer::Signer, transaction::Transaction,
+    commitment_config::CommitmentConfig, pubkey::Pubkey, signature::Keypair, signer::Signer,
+    transaction::Transaction,
 };
 
 pub struct VaultHandler<'a> {
@@ -34,20 +43,30 @@ impl<'a> VaultHandler<'a> {
         RpcClient::new_with_commitment(self.rpc_url.clone(), CommitmentConfig::confirmed())
     }
 
-    pub async fn get_vaults(
-        &self,
-        ncn_vault_tickets: &[Pubkey],
-    ) -> anyhow::Result<Vec<(Pubkey, Vault)>> {
+    pub async fn get_vaults(&self) -> anyhow::Result<HashMap<Pubkey, Vault>> {
         let rpc_client = self.get_rpc_client();
-
-        let mut accounts = Vec::new();
-        for ticket in ncn_vault_tickets {
-            let account = rpc_client
-                .get_account(ticket)
-                .await
-                .context("Error: Failed to get NCNVaultTicket accounts")?;
-            accounts.push((ticket, account));
-        }
+        let accounts = rpc_client
+            .get_program_accounts_with_config(
+                &self.vault_program_id,
+                RpcProgramAccountsConfig {
+                    filters: Some(vec![RpcFilterType::Memcmp(Memcmp::new(
+                        0,
+                        MemcmpEncodedBytes::Bytes(vec![Vault::DISCRIMINATOR]),
+                    ))]),
+                    account_config: RpcAccountInfoConfig {
+                        encoding: Some(UiAccountEncoding::Base64),
+                        data_slice: None,
+                        commitment: None,
+                        min_context_slot: None,
+                    },
+                    with_context: None,
+                },
+            )
+            .await
+            .with_context(|| {
+                log::error!("Error failed to get VaultUpdateStateTracker");
+                "Failed to get VaultUpdateStateTracker accounts".to_string()
+            })?;
 
         let vaults: Vec<(Pubkey, Vault)> = accounts
             .iter()
@@ -55,36 +74,51 @@ impl<'a> VaultHandler<'a> {
                 let vault = Vault::try_from_slice_unchecked(&acc.data)
                     .context("Error: Failed to deserailize")
                     .ok()?;
-                Some((**pubkey, *vault))
+                Some((*pubkey, *vault))
             })
             .collect();
 
-        Ok(vaults)
+        Ok(HashMap::from_iter(vaults))
     }
 
-    pub async fn initialize_config(&self) {
+    /// Retrieves all existing `VaultOperatorDelegation` accounts associated with the program.
+    ///
+    /// # Returns
+    ///
+    /// An `anyhow::Result` containing a vector of `(Pubkey, VaultOperatorDelegation)` tuples. Each
+    /// tuple represents a vault operator delegation account and includes:
+    /// - `Pubkey`: The public key of the vault operator delegation account.
+    /// - `VaultOperatorDelegation`: The deserialized vault operator delegation data.
+    pub async fn get_vault_operator_delegations(
+        &self,
+    ) -> anyhow::Result<Vec<(Pubkey, VaultOperatorDelegation)>> {
         let rpc_client = self.get_rpc_client();
+        let accounts = rpc_client
+            .get_program_accounts_with_config(
+                &self.vault_program_id,
+                RpcProgramAccountsConfig {
+                    filters: Some(vec![RpcFilterType::Memcmp(Memcmp::new(
+                        0,
+                        MemcmpEncodedBytes::Bytes(vec![VaultOperatorDelegation::DISCRIMINATOR]),
+                    ))]),
+                    account_config: RpcAccountInfoConfig {
+                        encoding: Some(UiAccountEncoding::Base64),
+                        ..RpcAccountInfoConfig::default()
+                    },
+                    ..RpcProgramAccountsConfig::default()
+                },
+            )
+            .await?;
 
-        let mut ix_builder = InitializeConfigBuilder::new();
-        let config_address = Config::find_program_address(&self.vault_program_id).0;
-        let ix_builder = ix_builder
-            .config(config_address)
-            .admin(self.payer.pubkey())
-            .restaking_program(pubkey!("5b2dHDz9DLhXnwQDG612bgtBGJD62Riw9s9eYuDT3Zma"));
-        let mut ix = ix_builder.instruction();
-        ix.program_id = self.vault_program_id;
+        let delegations: Vec<(Pubkey, VaultOperatorDelegation)> = accounts
+            .into_iter()
+            .filter_map(|(pubkey, acc)| {
+                VaultOperatorDelegation::try_from_slice_unchecked(&acc.data)
+                    .map_or(None, |v| Some((pubkey, *v)))
+            })
+            .collect();
 
-        let blockhash = rpc_client.get_latest_blockhash().await.expect("");
-        let tx = Transaction::new_signed_with_payer(
-            &[ix],
-            Some(&self.payer.pubkey()),
-            &[&self.payer],
-            blockhash,
-        );
-        rpc_client
-            .send_and_confirm_transaction(&tx)
-            .await
-            .expect("");
+        Ok(delegations)
     }
 
     pub async fn initialize(&self, token_mint: Pubkey) {

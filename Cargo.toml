@@ -10,13 +10,13 @@ path = "src/bin/main.rs"
 
 [dependencies]
 clap = { version = "4.4.7", features = ["derive", "env"] }
-jito-bytemuck = { git = "https://github.com/jito-foundation/restaking.git", branch = "master", version = "=0.0.2" }
-jito-restaking-client = { git = "https://github.com/jito-foundation/restaking.git", branch = "master", version = "=0.0.2" }
-jito-restaking-core = { git = "https://github.com/jito-foundation/restaking.git", branch = "master", version = "=0.0.2" }
-jito-vault-client = { git = "https://github.com/jito-foundation/restaking.git", branch = "master", version = "=0.0.2" }
-jito-vault-core = { git = "https://github.com/jito-foundation/restaking.git", branch = "master", version = "=0.0.2" }
-jito-vault-sdk = { git = "https://github.com/jito-foundation/restaking.git", branch = "master", version = "=0.0.2" }
-jito-account-traits-derive = { git = "https://github.com/jito-foundation/restaking.git", branch = "master", version = "=0.0.2" }
+jito-account-traits-derive = { git = "https://github.com/jito-foundation/restaking.git", branch = "master" }
+jito-bytemuck = { git = "https://github.com/jito-foundation/restaking.git", branch = "master" }
+jito-restaking-client = { git = "https://github.com/jito-foundation/restaking.git", branch = "master" }
+jito-restaking-core = { git = "https://github.com/jito-foundation/restaking.git", branch = "master" }
+jito-vault-client = { git = "https://github.com/jito-foundation/restaking.git", branch = "master" }
+jito-vault-core = { git = "https://github.com/jito-foundation/restaking.git", branch = "master" }
+jito-vault-sdk = { git = "https://github.com/jito-foundation/restaking.git", branch = "master" }
 lib-sokoban = "0.3.2"
 solana-account-decoder = "~1.18.0"
 solana-client = "~1.18.0"

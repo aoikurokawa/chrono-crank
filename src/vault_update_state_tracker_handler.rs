@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use anyhow::Context;
 use jito_bytemuck::{AccountDeserialize, Discriminator};
 use jito_restaking_core::{ncn_operator_state::NcnOperatorState, ncn_vault_ticket::NcnVaultTicket};
@@ -53,6 +55,54 @@ impl<'a> VaultUpdateStateTrackerHandler<'a> {
 
     fn get_rpc_client(&self) -> RpcClient {
         RpcClient::new_with_commitment(self.rpc_url.clone(), CommitmentConfig::confirmed())
+    }
+
+    pub async fn get_update_state_trackers(
+        &self,
+    ) -> anyhow::Result<HashMap<Pubkey, VaultUpdateStateTracker>> {
+        let rpc_client = self.get_rpc_client();
+        let accounts = rpc_client
+            .get_program_accounts_with_config(
+                &self.vault_program_id,
+                RpcProgramAccountsConfig {
+                    filters: Some(vec![RpcFilterType::Memcmp(Memcmp::new(
+                        0,
+                        MemcmpEncodedBytes::Bytes(vec![VaultUpdateStateTracker::DISCRIMINATOR]),
+                    ))]),
+                    account_config: RpcAccountInfoConfig {
+                        encoding: Some(UiAccountEncoding::Base64),
+                        data_slice: None,
+                        commitment: None,
+                        min_context_slot: None,
+                    },
+                    with_context: None,
+                },
+            )
+            .await
+            .with_context(|| {
+                log::error!("Error failed to get VaultUpdateStateTracker");
+                "Failed to get VaultUpdateStateTracker accounts".to_string()
+            })?;
+
+        let trackers: Vec<VaultUpdateStateTracker> = accounts
+            .iter()
+            .filter_map(|(_pubkey, tracker_acc)| {
+                match VaultUpdateStateTracker::try_from_slice_unchecked(&tracker_acc.data) {
+                    Ok(tracker) => Some(*tracker),
+                    Err(e) => {
+                        log::error!("Error deserializing VaultUpdateStateTracker: {:?}", e);
+                        None
+                    }
+                }
+            })
+            .collect();
+
+        let mut map = HashMap::new();
+        for tracker in trackers {
+            map.entry(tracker.vault).or_insert(tracker);
+        }
+
+        Ok(map)
     }
 
     async fn get_update_state_tracker(
@@ -253,71 +303,71 @@ impl<'a> VaultUpdateStateTrackerHandler<'a> {
         Ok(())
     }
 
-    pub async fn crank(&self, vaults: &[Pubkey], operators: &[Pubkey]) -> anyhow::Result<()> {
+    pub async fn crank(&self, vault: &Pubkey, operators: &[Pubkey]) -> anyhow::Result<()> {
         let rpc_client = self.get_rpc_client();
         let slot = rpc_client.get_slot().await.expect("get slot");
 
-        for vault in vaults {
-            for operator in operators {
-                let vault_operator_delegation = VaultOperatorDelegation::find_program_address(
-                    &self.vault_program_id,
-                    vault,
-                    operator,
-                )
-                .0;
+        for operator in operators {
+            let vault_operator_delegation = VaultOperatorDelegation::find_program_address(
+                &self.vault_program_id,
+                vault,
+                operator,
+            )
+            .0;
 
-                if let Err(_e) = self
-                    .get_vault_operator_delegation(&vault_operator_delegation)
-                    .await
-                {
-                    log::error!("Error: Can not find vault operator delegation: {vault_operator_delegation}");
-                    continue;
+            if let Err(_e) = self
+                .get_vault_operator_delegation(&vault_operator_delegation)
+                .await
+            {
+                log::error!(
+                    "Error: Can not find vault operator delegation: {vault_operator_delegation}"
+                );
+                continue;
+            }
+            let tracker = VaultUpdateStateTracker::find_program_address(
+                &self.vault_program_id,
+                vault,
+                slot / self.epoch_length,
+            )
+            .0;
+
+            log::info!(
+                "Crank Vault Operator Delegation: {}, Vault Update State Tracker: {}",
+                vault_operator_delegation,
+                tracker
+            );
+
+            let mut ix_builder = CrankVaultUpdateStateTrackerBuilder::new();
+            ix_builder
+                .config(self.config_address)
+                .vault(*vault)
+                .operator(*operator)
+                .vault_operator_delegation(vault_operator_delegation)
+                .vault_update_state_tracker(tracker);
+            let mut ix = ix_builder.instruction();
+            ix.program_id = self.vault_program_id;
+
+            let blockhash = match rpc_client.get_latest_blockhash().await {
+                Ok(bh) => bh,
+                Err(e) => {
+                    log::error!("Failed to get latest blockhash: {e}");
+                    return Err(anyhow::Error::new(e).context("Failed to get latest blockhash"));
                 }
-                let tracker = VaultUpdateStateTracker::find_program_address(
-                    &self.vault_program_id,
-                    vault,
-                    slot / self.epoch_length,
-                )
-                .0;
+            };
+            let tx = Transaction::new_signed_with_payer(
+                &[ix],
+                Some(&self.payer.pubkey()),
+                &[&self.payer],
+                blockhash,
+            );
 
-                log::info!(
-                    "Crank Vault Operator Delegation: {}, Vault Update State Tracker: {}",
-                    vault_operator_delegation,
-                    tracker
-                );
-
-                let mut ix_builder = CrankVaultUpdateStateTrackerBuilder::new();
-                ix_builder
-                    .config(self.config_address)
-                    .vault(*vault)
-                    .operator(*operator)
-                    .vault_operator_delegation(vault_operator_delegation)
-                    .vault_update_state_tracker(tracker);
-                let mut ix = ix_builder.instruction();
-                ix.program_id = self.vault_program_id;
-
-                let blockhash = match rpc_client.get_latest_blockhash().await {
-                    Ok(bh) => bh,
-                    Err(e) => {
-                        log::error!("Failed to get latest blockhash: {e}");
-                        return Err(anyhow::Error::new(e).context("Failed to get latest blockhash"));
-                    }
-                };
-                let tx = Transaction::new_signed_with_payer(
-                    &[ix],
-                    Some(&self.payer.pubkey()),
-                    &[&self.payer],
-                    blockhash,
-                );
-
-                match rpc_client.send_and_confirm_transaction(&tx).await {
-                    Ok(sig) => {
-                        log::info!("Transaction confirmed: {:?}", sig);
-                    }
-                    Err(e) => {
-                        log::error!("Failed to send transaction: {:?}", e);
-                        return Err(anyhow::Error::new(e).context("Failed to send transaction"));
-                    }
+            match rpc_client.send_and_confirm_transaction(&tx).await {
+                Ok(sig) => {
+                    log::info!("Transaction confirmed: {:?}", sig);
+                }
+                Err(e) => {
+                    log::error!("Failed to send transaction: {:?}", e);
+                    return Err(anyhow::Error::new(e).context("Failed to send transaction"));
                 }
             }
         }
