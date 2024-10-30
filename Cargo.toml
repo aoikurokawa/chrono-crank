@@ -4,6 +4,10 @@ version = "0.1.0"
 edition = "2021"
 description = "Script to keep the vault"
 
+[lib]
+name = "chrono_crank"
+path = "src/lib.rs"
+
 [[bin]]
 name = "chrono-crank"
 path = "src/bin/main.rs"
